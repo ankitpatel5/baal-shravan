@@ -243,6 +243,19 @@ When the user says anything like "build for iOS submission", "archive for App St
   (tests/api-usage.test.js). Rules: apiUsage create/update any-authed,
   read admin. NOT counted: guest traffic (no auth), Drive thumbnail <img>
   loads, native FCM sends.
+- 2026-07-27: **v1.12 CUT — SD audio player + Nitya reorder**. iOS 1.12 (1)
+  archived (bundle verified: sd-texts.js, hero-follows-language ids,
+  nityaWireDrag, prose tiers) + uploaded to ASC ("Uploaded App").
+  Android 1.12 (8) signed AAB at
+  android/app/build/outputs/bundle/release/app-release.aab. Contents:
+  SD video→audio rework (R2 mp3s, lang selector, expandable rows,
+  fullscreen player, gapless rounds, speed), hero-follows-the-ear
+  redesign, Nitya edit-mode drag reorder, preview always 1×, review
+  fixes (toast z-index, row-open staleness, drag races). Web prod
+  shipped same day (mysanskar.vercel.app verified). ASC web steps owed
+  (owner): create 1.12, attach build, submit. After LIVE: bump
+  app-version-defaults.json ios.latest → 1.12. Motion package NOT
+  included (mock-only, awaiting owner verdict).
 - 2026-07-21: **v1.11 CUT — Mukhpath 2.0 + telemetry**. iOS 1.11 (1)
   archived (bundle verified: Worker media URL, sd-meta 315, apiTally
   telemetry, lines-toggle, 222 poster) + uploaded to ASC. Android 1.11 (7)
