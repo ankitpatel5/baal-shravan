@@ -383,14 +383,14 @@
                 <button data-n="0">∞</button>
               </div>
             </div>
-            <div class="sd-linesrow">
-              <div>
-                <div class="sd-linesrow-t">Repeat each line</div>
-                <div class="sd-linesrow-s" id="sd-lines-sub">Line-by-line practice, then the full shlok</div>
+            <div class="sd-repeatrow">
+              <span class="sd-repeat-lab">Language</span>
+              <div class="sd-seg" id="sd-lang-seg">
+                <button data-lang="sanskrit">Sanskrit</button>
+                <button data-lang="gujarati">Gujarati</button>
               </div>
-              <button class="settings-feature-toggle" id="sd-lines-toggle" role="switch" aria-checked="false" aria-label="Repeat each line"><span class="settings-feature-toggle-dot"></span></button>
             </div>
-            <div class="sd-listhint">Tap to add to today’s practice · hold to mark memorized</div>
+            <div class="sd-listhint">Tap a shlok to preview · Select to practice · hold to mark memorized</div>
           </div>
           <div id="sd-sections"></div>
           <div class="sd-startbar" id="sd-startbar">
@@ -1644,48 +1644,58 @@
       </div>
     </div>
 
-    <!-- Satsang Diksha Mukhpath: fullscreen chant player (overlay, outside the view system) -->
+    <!-- Satsang Diksha Mukhpath: fullscreen audio player (overlay, outside
+         the view system). Committee spec 2026-07-27: sacred trilingual
+         artifact — Sanskrit hero card + gold seal + honest loop hairline,
+         split liveness/orientation chips, speed pills, one saffron fill. -->
     <div id="sd-player" class="hidden">
-      <video id="sd-video" playsinline webkit-playsinline preload="auto"></video>
-      <img class="sd-poster hidden" id="sd-poster" alt="">
-      <div class="sd-counter" id="sd-counter"></div>
-      <div class="sd-notice hidden" id="sd-notice"></div>
+      <audio id="sd-audio" preload="auto"></audio>
+      <div class="sd-fs-top">
+        <button class="sd-fs-exit" id="sd-exit" aria-label="Exit">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <div class="sd-round-chip hidden" id="sd-round-chip"><span class="sd-round-dot"></span><span id="sd-round-txt"></span></div>
+        <div class="sd-queue-pill" id="sd-queue-pill"></div>
+      </div>
+      <div class="sd-fs-scroll" id="sd-fs-scroll">
+        <div class="sd-fs-fit" id="sd-fs-fit">
+          <div class="sd-fs-hero">
+            <div class="sd-fs-hero-head">
+              <span class="sd-fs-eyebrow sd-fs-eyebrow--skt">Sanskrit</span>
+              <span class="sd-fs-seal" id="sd-seal"></span>
+            </div>
+            <div class="sd-fs-verse" id="sd-fs-verse"></div>
+            <div class="sd-hairline-track"><div class="sd-hairline" id="sd-hairline"></div></div>
+          </div>
+          <div class="sd-fs-eyebrow">Gujarati</div>
+          <div class="sd-fs-guj" id="sd-fs-guj"></div>
+          <div class="sd-fs-eyebrow">English</div>
+          <div class="sd-fs-eng-wrap"><div class="sd-fs-eng" id="sd-fs-eng"></div></div>
+          <div class="sd-fs-notes" id="sd-fs-notes"></div>
+        </div>
+      </div>
+      <div class="sd-fs-console">
+        <div class="sd-speed" id="sd-speed">
+          <button data-rate="0.5">0.5</button>
+          <button data-rate="0.75">0.75</button>
+          <button data-rate="1">1×</button>
+          <button data-rate="1.25">1.25</button>
+          <button data-rate="1.5">1.5</button>
+        </div>
+        <div class="sd-transport">
+          <button class="sd-tr-side" id="sd-prev" aria-label="Previous shlok">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <button class="sd-tr-main" id="sd-pp" aria-label="Play or pause">
+            <svg class="sd-pp-play" viewBox="0 0 15 16" width="24" height="26" fill="currentColor"><path d="M2 1.5v13l11-6.5z"/></svg>
+            <svg class="sd-pp-pause" viewBox="0 0 24 24" width="24" height="26" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+          </button>
+          <button class="sd-tr-side" id="sd-next" aria-label="Next shlok">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+      </div>
       <div class="sd-spin hidden" id="sd-spin"></div>
-      <button class="sd-amb sd-amb--x" id="sd-exit" aria-label="Exit">
-        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-      <button class="sd-amb sd-amb--prev" id="sd-prev" aria-label="Previous shlok">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-      </button>
-      <button class="sd-amb sd-amb--pp" id="sd-pp" aria-label="Pause">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
-      </button>
-      <button class="sd-amb sd-amb--next" id="sd-next" aria-label="Next shlok">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-      </button>
-      <div class="sd-veil hidden" id="sd-veil">
-        <div class="sd-veil-round" id="sd-veil-round"></div>
-        <div class="sd-veil-row">
-          <button class="sd-veil-side" id="sd-veil-prev" aria-label="Previous shlok">
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-          </button>
-          <button class="sd-veil-main" id="sd-veil-play" aria-label="Resume">
-            <svg viewBox="0 0 15 16" width="28" height="32" fill="#241a09"><path d="M2 1.5v13l11-6.5z"/></svg>
-          </button>
-          <button class="sd-veil-side" id="sd-veil-next" aria-label="Next shlok">
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-          </button>
-        </div>
-        <button class="sd-veil-restart" id="sd-veil-restart">↺&nbsp; Restart this shlok</button>
-        <div class="sd-veil-hint">Freeze on any word — say it together, then resume</div>
-      </div>
-      <div class="sd-breath hidden" id="sd-breath">
-        <div>
-          <div class="sd-breath-r" id="sd-breath-r"></div>
-          <div class="sd-breath-rule" id="sd-breath-rule"></div>
-          <div class="sd-breath-s" id="sd-breath-s"></div>
-        </div>
-      </div>
     </div>
 
     <div id="toast" class="toast hidden"></div>
@@ -1711,7 +1721,7 @@
   <script src="title-translations.js"></script>
   <script src="conversation-starters.js"></script>
   <script src="lyrics-data.js"></script>
-  <script src="sd-meta.js"></script>
+  <script src="sd-texts.js"></script>
   <script src="utils.js"></script>
   <script src="app-build.js"></script>
   <script src="app.js?v=20250601u"></script>

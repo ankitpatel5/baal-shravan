@@ -24,7 +24,7 @@ FILES=(
   firebase-config.js
   conversation-starters.js
   lyrics-data.js
-  sd-meta.js
+  sd-texts.js
   lottie.min.js
   manifest.json
   baal.png

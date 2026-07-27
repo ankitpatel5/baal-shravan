@@ -250,42 +250,51 @@ When the user says anything like "build for iOS submission", "archive for App St
   submit. After LIVE: bump app-version-defaults.json ios.latest → 1.11.
 
 ## Feature map (find things in app.js by function name, not line number)
-- **Satsang Diksha Mukhpath** (Learn tab · shipped to staging 2026-07-19):
-  `renderSdHero` (guest-locked tile) → `openSdHub` (view-sd-hub: sticky
-  `.sd-fixed` header w/ tracker + repeat picker + # go-to over full 315
-  catalog, `sdRenderSections`, sections of 10, per-section select) →
-  `sdStartQueue` → `#sd-player` fixed overlay (`sdLoadShlok`/`sdOnEnded`
-  round+handoff breaths, `sdTogglePause` veil, ambient ✕‹⏸›). Videos
-  stream from **Cloudflare R2** (`SD_MEDIA_BASE` in app.js →
-  pub-0d9a353ce013482c97d324294573a245.r2.dev/satsang-diksha/shloka-N.mp4;
-  migrated off Drive 2026-07-20 after Drive's IP-abuse blocker took out
-  playback for the dev network — see scripts/upload-sd-local.py, creds in
-  gitignored .r2-creds.json, source of truth = ~/Desktop/Satsang Diksha +
-  the R2 bucket mysanskar-media). No catalog fetch — deterministic names,
-  static 1-315 map. sd-meta.js: 315/315 covered — 311 auto-detected
-  (visual+audio) + owner-verified MANUAL_OVERRIDES in build-sd-meta.py
-  (#53=31s noise-poisoned threshold, #222=33s chant-over-black-fade,
-  #267=32s chant-over-white-text, #284=-1 sentinel: combined 283-284 video
-  has NO separate full chant → always plays whole + gentle #sd-notice when
-  the repeat-lines toggle is off).
-  Served via the media Worker
-  (workers/media-proxy.js → https://media.mysanskar.workers.dev, free plan
-  100k req/day, byte-range + immutable-cache + CORS; deployed by API —
-  PUT accounts/{id}/workers/scripts/media with R2 binding MEDIA; the
-  restToken needs "Workers Scripts:Edit"). r2.dev pub URL still exists as
-  fallback. Cache API edge-caching is a future optimization if req volume
-  ever nears the free cap.
-  Note: this Mac's network TLS-blocks r2.cloudflarestorage.com (S3 API) —
-  uploads must go via api.cloudflare.com REST (upload-sd-local.py does). Single-audio: `sd` entry in stopAllOtherAudio map +
-  stopAllOtherAudio('sd') on video 'play'. Persistence: `drift.sdMem` mirrors
-  Firestore `users/{uid}/settings/sdMem {nums:[]}` (gujProgress pattern:
-  debounced save, union-merge at sign-in, impersonation/guest write-guard —
-  memorized survives devices/reinstalls); `drift.sdRepeat` local-only;
-  selection deliberately session-only. Back: BACK_BTN_BY_VIEW + goBack closes #sd-player first.
-  Wake lock: navigator.wakeLock + visibilitychange re-acquire (iOS 16.4+;
-  KeepAwake plugin still open for older iOS). NOT yet done: msClaim('sd')
-  lock-screen identity (utils MS_ACTION_MAP has no 'sd' — foreground
-  feature v1), background-audio-on-lock spike, ghanti tick/haptics.
+- **Satsang Diksha Mukhpath** (Learn tab · AUDIO rework 2026-07-27, replaced
+  the video player entirely): `renderSdHero` (guest-locked tile) →
+  `openSdHub` (view-sd-hub: sticky `.sd-fixed` header w/ tracker + repeat
+  picker ×1/×3/×5/∞ + **language selector** `#sd-lang-seg`
+  Sanskrit/Gujarati (`drift.sdLang`, labels both in English per owner) + #
+  go-to over full 315 catalog, `sdRenderSections`, sections of 10) →
+  browse rows are **expandable** (`sdBuildRow` → `.sd-row2`: tap head =
+  `sdToggleRow` height-animated `.sd-xp` panel with 3 labeled texts +
+  36px preview play `sdPreviewToggle`; Select pill = queue; hold 400ms =
+  memorized) → `sdStartQueue` → `#sd-player` fullscreen audio player
+  (`sdLoadShlok`, Sanskrit hero card + gold seal + saffron `#sd-hairline`
+  progress, GUJARATI/ENGLISH blocks + notes from `window.SD_TEXTS`
+  [sd-texts.js, 316 shloks: sanskrit[]/gujarati/english/gujFoot/engFoot,
+  built from ~/Desktop/"Satsang Diksha Audio"/Satsang_Diksha_Texts.json],
+  `sdFit` scale tiers --sd-scale 1→0.92→0.85→0.78 then notes-collapse then
+  eng-scroll — Sanskrit inviolable; speed pills 0.5–1.5 `sdSetSpeed` →
+  `drift.sdSpeed`). **Gapless rounds**: audio.loop=true + timeupdate wrap
+  detection (`_sdLastT`) increments round chip "Round n of m"; final round
+  sets loop=false so 'ended' fires → `sdOnEnded` advances queue/closes.
+  (Documented deviation from the "never audio.loop" music rule — rounds
+  must be seamless.) Audio streams from R2 via the media Worker:
+  `SD_AUDIO_BASE` = media.mysanskar.workers.dev/satsang-diksha-audio/
+  {sanskrit|gujarati}/shlok-N.mp3 (630 files verified 2026-07-26, mp4s
+  deleted from bucket; uploader = scripts/upload-sd-audio.py, REST-only —
+  this Mac's network TLS-blocks the S3 endpoint; creds in gitignored
+  .r2-creds.json). One shared `#sd-audio` element, two heads: `_sdMode`
+  'player'|'preview'. sd-meta.js/SD_META + "Repeat each line" toggle
+  REMOVED (sdRepeatLines LS key actively cleaned up). Worker details:
+  workers/media-proxy.js, free 100k req/day, byte-range + immutable-cache
+  + CORS; r2.dev pub URL is fallback. Single-audio: `sd` entry in
+  stopAllOtherAudio map, both player and preview claim it. Persistence:
+  `drift.sdMem` mirrors Firestore `users/{uid}/settings/sdMem` (debounced,
+  union-merge, write-guards); `drift.sdRepeat`/`sdLang`/`sdSpeed`
+  local-only; selection session-only. Back: goBack closes #sd-player
+  first. Wake lock: navigator.wakeLock + visibilitychange re-acquire.
+  NOT yet done: msClaim('sd') lock-screen identity, ghanti tick/haptics.
+- **Nitya reorder** (Edit mode, 2026-07-27): `nityaWireDrag` — right-edge ≡
+  handle per row (only visible in `.nitya-editing`), Pointer Events +
+  setPointerCapture, `touch-action:none` scoped to the handle so the rest
+  of the row still scrolls, transforms-only during drag (siblings spring
+  with 0.18s overshoot bezier), splice + clean re-render on drop.
+  Persistence is deferred: `_nityaDirty` set on drop, flushed by Done
+  (`toggleNityaEdit` → one `saveNitya()` = LS + Firestore + widget sync
+  per edit session; a remove click mid-session also flushes since
+  saveNitya clears the flag). Verified with real touch (adb input swipe).
 - **Nitya home-screen widget**: `nityaSyncToWidget` / `playNityaFromWidget`; native
   `App/NityaWidgetPlugin.swift` + `NityaWidget/NityaWidget.swift` (WidgetKit target);
   App Group `group.com.ankitpatel5.mysanskar`, key `nitya.items`; deep link

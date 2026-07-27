@@ -155,7 +155,7 @@
     'drift.onboardingDone',
     'drift.aiCharacters', 'drift.aiStories', 'drift.aiUsage', 'drift.imagenQuota',
     'drift.gujProgress', 'drift.completedStories',
-    'drift.sdMem', 'drift.sdRepeat', 'drift.sdRepeatLines',
+    'drift.sdMem', 'drift.sdRepeat', 'drift.sdLang', 'drift.sdSpeed',
     'drift.nitya', 'drift.nitya.v3',
     'drift.ekRemind', 'drift.ekRemindDays', 'drift.pushEnabled', 'drift.audiobooksEnabled',
     LS.playlists, LS.playCounts, LS.lastTrack, LS.queue, LS.library,
@@ -1603,7 +1603,7 @@
       // ttsState.active (not just audible) also covers the prerendered-audio
       // fetch window, where TTS is loading but nothing is playing yet.
       tts:       { playing: () => ttsState.active,                stop: () => stopTTS() },
-      sd:        { playing: () => sdVideoPlaying(),               stop: () => sdPauseFromFocus() },
+      sd:        { playing: () => sdAudioPlaying(),               stop: () => sdPauseFromFocus() },
     });
   }
 
@@ -2547,6 +2547,7 @@
   // specifically (not the "Musical" one).
   const NITYA_DEFAULTS = [/a+rti/i, /full\s*chesta|chesta/i, /namavali.*path|path.*namavali/i];
   let _nityaEditing = false;
+  let _nityaDirty = false;   // reorder made in edit mode, not yet persisted (flushed on Done)
   const NITYA_MUSIC_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
   const NITYA_PLAY_SVG  = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>';
   const NITYA_PAUSE_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
@@ -2558,6 +2559,7 @@
     } catch { state.nitya = null; }
   }
   function saveNitya() {
+    _nityaDirty = false;
     try { localStorage.setItem(LS.nitya, JSON.stringify(state.nitya || [])); } catch {}
     saveNityaToFirestore();
     nityaSyncToWidget();
@@ -2715,10 +2717,76 @@
       btn.style.paddingLeft = playing ? '0' : '2px';
     });
   }
+  // Drag-to-reorder (edit mode): pointer capture on the ≡ handle, transforms-only
+  // while the finger moves, one array splice + clean re-render on drop. Persisting
+  // (LS + Firestore + widget sync) waits for Done — a drag session is one edit.
+  let _nityaDragging = false;
+  function nityaWireDrag(row) {
+    const handle = row.querySelector('.nitya-row-handle');
+    if (!handle) return;
+    handle.addEventListener('pointerdown', (e) => {
+      if (!_nityaEditing || _nityaDragging) return;
+      e.preventDefault();
+      const list = $('nitya-list');
+      const rows = Array.from(list.querySelectorAll('.nitya-row'));
+      const from = rows.indexOf(row);
+      if (from < 0) return;
+      const step = rows.length > 1 ? Math.abs(rows[1].offsetTop - rows[0].offsetTop) : row.offsetHeight;
+      const startY = e.clientY;
+      let to = from;
+      _nityaDragging = true;
+      try { handle.setPointerCapture(e.pointerId); } catch {}
+      row.classList.add('nitya-drag');
+      const move = (ev) => {
+        const dy = ev.clientY - startY;
+        row.style.transform = `translateY(${dy}px) scale(1.02)`;
+        const slot = Math.max(0, Math.min(rows.length - 1, from + Math.round(dy / step)));
+        if (slot === to) return;
+        to = slot;
+        rows.forEach((r, i) => {
+          if (r === row) return;
+          let shift = 0;
+          if (from < to && i > from && i <= to) shift = -step;
+          else if (to < from && i >= to && i < from) shift = step;
+          r.style.transform = shift ? `translateY(${shift}px)` : '';
+        });
+      };
+      const drop = () => {
+        handle.removeEventListener('pointermove', move);
+        handle.removeEventListener('pointerup', drop);
+        handle.removeEventListener('pointercancel', drop);
+        row.classList.add('nitya-settle');   // restores the springy transition, keeps the lift
+        row.style.transform = `translateY(${(to - from) * step}px) scale(1)`;
+        setTimeout(() => {
+          if (to !== from) {
+            const ids = rows.map((r) => r.dataset.nityaId);
+            const [moved] = ids.splice(from, 1);
+            ids.splice(to, 0, moved);
+            const arr = state.nitya || [];
+            const byId = {};
+            arr.forEach((x) => { if (x && x.id) byId[x.id] = x; });
+            // reordered visible rows first, then any entries hidden by library filtering
+            state.nitya = ids.map((id) => byId[id]).filter(Boolean)
+              .concat(arr.filter((x) => x && x.id && !ids.includes(x.id)));
+            _nityaDirty = true;
+          }
+          _nityaDragging = false;
+          renderNitya();                     // rebuild clean — drops every inline transform
+        }, 200);
+      };
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('pointerup', drop);
+      handle.addEventListener('pointercancel', drop);
+    });
+  }
   function renderNitya() {
     const section = $('nitya-section');
     const list = $('nitya-list');
     if (!section || !list) return;
+    // A rebuild detaches every row, which releases pointer capture on any
+    // in-flight drag — its drop() never fires, so clear the lock here or
+    // reordering is dead until the next full render cycle.
+    _nityaDragging = false;
     seedNityaDefaults();
     ensureNityaUpgrades();
     const libReady = !!(state.flatTracks && state.flatTracks.length);
@@ -2733,6 +2801,7 @@
       const t = state.trackById[s.id];
       const row = document.createElement('div');
       row.className = 'nitya-row';
+      row.dataset.nityaId = s.id;
       row.innerHTML = `
         <button class="nitya-row-remove" aria-label="Remove from Nitya">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
@@ -2742,7 +2811,10 @@
           <div class="nitya-row-title">${escapeHtml(t.name)}</div>
           <div class="nitya-row-sub">${escapeHtml(t.albumName || '')}</div>
         </div>
-        <button class="nitya-row-play" data-track-id="${s.id}" aria-label="Play"><span class="nitya-ic">${NITYA_PLAY_SVG}</span><span class="play-loader" aria-hidden="true"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="16.5" pathLength="100"/></svg></span></button>`;
+        <button class="nitya-row-play" data-track-id="${s.id}" aria-label="Play"><span class="nitya-ic">${NITYA_PLAY_SVG}</span><span class="play-loader" aria-hidden="true"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="16.5" pathLength="100"/></svg></span></button>
+        <button class="nitya-row-handle" aria-label="Reorder">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+        </button>`;
       row.querySelector('.nitya-row-remove').addEventListener('click', (e) => {
         e.stopPropagation();
         state.nitya = (state.nitya || []).filter((x) => x.id !== s.id);
@@ -2751,6 +2823,7 @@
       });
       row.querySelector('.nitya-row-play').addEventListener('click', (e) => { e.stopPropagation(); nityaToggle(s.id); });
       row.addEventListener('click', () => nityaToggle(s.id));
+      nityaWireDrag(row);
       list.appendChild(row);
     });
 
@@ -2767,7 +2840,11 @@
     }
     updateNityaButtons();
   }
-  function toggleNityaEdit() { _nityaEditing = !_nityaEditing; renderNitya(); }
+  function toggleNityaEdit() {
+    _nityaEditing = !_nityaEditing;
+    if (!_nityaEditing && _nityaDirty) saveNitya();   // one Firestore write + widget sync per edit session
+    renderNitya();
+  }
 
   function openNityaPicker() {
     const input = $('nitya-picker-input');
@@ -3504,53 +3581,39 @@
   }
 
   // ============== SATSANG DIKSHA MUKHPATH ==============
-  // Committee consult 2026-07-19 rev 4 (see CLAUDE.md): Learn-tab tile →
-  // hub with locked header (memorized tracker + repeat picker + # go-to)
-  // over the full 315-shlok catalog in sections of 10; tap-select builds a
-  // practice queue, hold marks memorized (parent-asserted); fullscreen
-  // portrait video player with repeat rounds, ~2s breath beats between
-  // rounds/shloks, ambient exit/prev/pause/next. Karaoke text is baked into
-  // the videos. Single-audio rule claimed on 'play'.
-  // Videos stream from Cloudflare R2 via the media Worker (2026-07-20):
-  // workers/media-proxy.js on the free plan (100k req/day) serves the
-  // bucket with byte ranges + immutable cache headers — no r2.dev rate
-  // limits, no Drive abuse heuristics, no catalog listing.
+  // Committee consults 2026-07-19 (hub rev 4) + 2026-07-27 (audio rework):
+  // the feature pivoted from mp4 karaoke videos to AUDIO (Gujarati/Sanskrit
+  // mp3s in R2) + the trilingual texts bundled in sd-texts.js. Hub = locked
+  // header (tracker + repeat + language + # go-to) over collapsible sections
+  // of 10; rows are EXPANDABLE (tap = preview panel w/ inline play + 3 texts,
+  // Select pill = queue, hold = memorized). Fullscreen player = "sacred
+  // trilingual artifact": Sanskrit hero card w/ gold seal + honest loop
+  // hairline, seamless gapless rounds (native loop + wrap detection — the
+  // "never audio.loop" music rule doesn't apply: rounds are counted via
+  // timeupdate wrap, not 'ended'), speed pills 0.5–1.5×. One shared <audio>
+  // serves player + row previews; single-audio rule claimed on 'play'.
 
   const SD_TOTAL = 315;
-  const SD_MEDIA_BASE = 'https://media.mysanskar.workers.dev/satsang-diksha';
-  function sdVideoUrl(num) { apiTally('r2'); return `${SD_MEDIA_BASE}/shloka-${num}.mp4`; }
-  // All 315 exist in R2 — the "catalog" is now a static full map (kept as a
-  // map so the availability checks stay unchanged if a future batch is ever
-  // partial again).
-  // #222's production fades to black for the closing chant — when skipping
-  // straight to it, show the card still (first frame, hosted beside the
-  // video) so the screen isn't just black while the audio plays.
-  const SD_STILL_POSTER = { '222': `${SD_MEDIA_BASE}/shloka-222-poster.jpg` };
+  const SD_AUDIO_BASE = 'https://media.mysanskar.workers.dev/satsang-diksha-audio';
+  let _sdLang = localStorage.getItem('drift.sdLang') === 'gujarati' ? 'gujarati' : 'sanskrit';
+  function sdAudioUrl(num) { apiTally('r2'); return `${SD_AUDIO_BASE}/${_sdLang}/shlok-${num}.mp3`; }
+  function sdText(num) { return (window.SD_TEXTS && window.SD_TEXTS[String(num)]) || null; }
 
-  const _sdCatalog = (() => {
-    const m = {};
-    for (let n = 1; n <= SD_TOTAL; n++) m[String(n)] = true;
-    return m;
-  })();
-  try { localStorage.removeItem('drift.sdCatalog.v1'); } catch {} // stale Drive-era cache
   let _sdSel = new Set();  // today's practice queue (session-only, deliberate)
   let _sdMem = null;       // Set of memorized shlok numbers (persisted per user)
   let _sdRepeat = (() => {
     const v = parseInt(localStorage.getItem('drift.sdRepeat') || '3', 10);
     return Number.isFinite(v) ? v : 3; // 0 = ∞
   })();
-  // "Repeat each line" (default OFF per owner 2026-07-20: most families
-  // want the full chant on repeat). ON = play the line-by-line practice
-  // section too. OFF = start each video at the full-chant timestamp
-  // (sd-meta.js; -1/missing = whole video).
-  let _sdRepeatLines = localStorage.getItem('drift.sdRepeatLines') === '1';
-  function sdStartTime(num) {
-    if (_sdRepeatLines) return 0;
-    const t = window.SD_META && window.SD_META[num];
-    return (typeof t === 'number' && t > 0) ? t : 0;
-  }
+  let _sdSpeed = (() => {
+    const v = parseFloat(localStorage.getItem('drift.sdSpeed') || '1');
+    return [0.5, 0.75, 1, 1.25, 1.5].includes(v) ? v : 1;
+  })();
+  try { localStorage.removeItem('drift.sdRepeatLines'); } catch {} // video-era pref
   // player session state
-  let _sdQueue = [], _sdQi = 0, _sdRound = 1, _sdBreathT = null, _sdWakeLock = null, _sdSeekTo = 0, _sdNoticeT = null;
+  let _sdQueue = [], _sdQi = 0, _sdRound = 1, _sdWakeLock = null, _sdLastT = 0;
+  let _sdMode = null; // 'player' | 'preview' — one shared <audio>, two heads
+  let _sdPreviewNum = null;
 
   function sdMem() {
     if (_sdMem === null) {
@@ -3565,12 +3628,8 @@
   }
 
   // ── Memorized set: cross-device persistence (gujProgress pattern) ──
-  // Doc: users/{uid}/settings/sdMem { nums: ['313', ...] }. Debounced save;
-  // union-merge on sign-in. "Memorized" can be un-marked (a parent correcting
-  // a mis-tap), so remote is REPLACED by local after first merge — the union
-  // only runs at sync time to rescue progress made offline on another device.
   function sdMemRef() { return state.user ? window.fbDb.doc(`users/${activeUid()}/settings/sdMem`) : null; }
-  let _sdMemSaveTimer = null, _sdMemSynced = false;
+  let _sdMemSaveTimer = null;
   function saveSdMemToFirestore() {
     if (isImpersonating() || isGuestMode()) return; // view-only / no account
     const ref = sdMemRef(); if (!ref) return;
@@ -3588,7 +3647,6 @@
       const merged = new Set([...local, ...remote.map(String)]);
       const localGrew = merged.size > remote.length;
       _sdMem = merged;
-      _sdMemSynced = true;
       try { localStorage.setItem('drift.sdMem', JSON.stringify([...merged])); } catch {}
       if (localGrew && !isImpersonating() && !isGuestMode()) ref.set({ nums: [...merged] }, { merge: true }).catch(() => {});
       if (!$('view-sd-hub').classList.contains('hidden')) { sdRenderSections(); sdRenderHeader(); }
@@ -3622,7 +3680,7 @@
   function openSdHub() {
     logActivity('learn', 'Satsang Diksha Mukhpath');
     sdRenderHeader();
-    sdRenderSections();   // static catalog — renders complete, instantly
+    sdRenderSections();
     switchView('view-sd-hub');
     $('content').scrollTo({ top: 0, behavior: 'instant' });
   }
@@ -3633,47 +3691,20 @@
     $('sd-mem-bar').style.width = `${Math.max(1.5, (m / SD_TOTAL) * 100).toFixed(1)}%`;
     document.querySelectorAll('#sd-seg button').forEach((b) =>
       b.classList.toggle('active', parseInt(b.dataset.n, 10) === _sdRepeat));
+    document.querySelectorAll('#sd-lang-seg button').forEach((b) =>
+      b.classList.toggle('active', b.dataset.lang === _sdLang));
     const n = _sdSel.size;
     $('sd-startbar').classList.toggle('sd-startbar--on', n > 0);
     $('view-sd-hub').classList.toggle('sd-has-queue', n > 0);
     $('sd-start').textContent = `▶  Start playing · ${n} shlok${n === 1 ? '' : 's'}`;
     $('sd-clear').textContent = `Clear (${n})`;
-    const lt = $('sd-lines-toggle');
-    if (lt) {
-      lt.setAttribute('aria-checked', _sdRepeatLines ? 'true' : 'false');
-      $('sd-lines-sub').textContent = _sdRepeatLines
-        ? 'Line-by-line practice, then the full shlok'
-        : 'Full shlok only — line repeats skipped';
-    }
   }
 
-  // Hold-to-memorize + tap-to-select on one element (chips grammar, rev 3).
-  // Toggles update the DOM IN PLACE — a full re-render here rebuilt the list
-  // and yanked the scroll position (owner-reported jump on select).
-  function sdWireHold(el, num) {
-    let holdT = null, held = false;
-    const down = () => { held = false; holdT = setTimeout(() => { held = true; sdToggleMem(num); }, 550); };
-    const up = () => clearTimeout(holdT);
-    el.addEventListener('touchstart', down, { passive: true });
-    el.addEventListener('mousedown', down);
-    ['touchend', 'touchcancel', 'mouseup', 'mouseleave'].forEach((ev) => el.addEventListener(ev, up));
-    el.addEventListener('click', () => {
-      if (held) { held = false; return; }
-      _sdSel.has(num) ? _sdSel.delete(num) : _sdSel.add(num);
-      sdUpdateRowEl(num); sdUpdateSectionHead(sdSectionStart(num)); sdRenderHeader();
-    });
-    el.addEventListener('contextmenu', (e) => e.preventDefault()); // long-press must not open a menu
-  }
-  function sdToggleMem(num) {
-    const mem = sdMem();
-    mem.has(num) ? mem.delete(num) : mem.add(num);
-    sdSaveMem();
-    sdUpdateRowEl(num); sdUpdateSectionHead(sdSectionStart(num)); sdRenderHeader();
-  }
-
-  // Sections are collapsed by default; the user expands the ones they're
-  // exploring (multiple may be open). Expanded set is session-only.
-  const _sdOpen = new Set();
+  // ── Sections + expandable rows (browse consult 2026-07-27) ─────────
+  // Gesture map: tap row = expand/collapse preview · Select pill = queue ·
+  // hold row head = mark memorized · panel play = hear it now.
+  const _sdOpen = new Set();      // expanded SECTION starts
+  const _sdRowOpen = new Set();   // expanded ROW numbers (session)
   function sdSectionStart(num) { return Math.floor((parseInt(num, 10) - 1) / 10) * 10 + 1; }
   function sdSectionIds(start) {
     const ids = [];
@@ -3684,8 +3715,11 @@
   function sdUpdateRowEl(num) {
     const row = $(`sd-row-${num}`);
     if (!row) return; // collapsed section — state applies on next expand
-    row.classList.toggle('sd-row--sel', _sdSel.has(String(num)));
+    const sel = _sdSel.has(String(num));
+    row.classList.toggle('sd-row--sel', sel);
     row.classList.toggle('sd-row--mem', sdMem().has(String(num)));
+    const pill = row.querySelector('.sd-row-select');
+    if (pill) pill.textContent = sel ? '✓ Queued' : 'Select';
   }
   function sdUpdateSectionHead(start) {
     const head = $(`sd-sechead-${start}`);
@@ -3693,8 +3727,7 @@
     const ids = sdSectionIds(start);
     const mem = sdMem();
     const memN = ids.filter((n) => mem.has(n)).length;
-    const avail = ids.filter((n) => _sdCatalog && _sdCatalog[n]);
-    const allSel = avail.length > 0 && avail.every((n) => _sdSel.has(n));
+    const allSel = ids.every((n) => _sdSel.has(n));
     const m = head.querySelector('.sd-sechead-m');
     if (m) { m.textContent = `${memN}/${ids.length} memorized`; m.classList.toggle('sd-sechead-m--zero', !memN); }
     const selBtn = head.querySelector('.sd-secsel');
@@ -3703,15 +3736,111 @@
 
   function sdBuildRow(n) {
     const mem = sdMem();
+    const sel = _sdSel.has(n);
     const row = document.createElement('div');
-    const on = _sdCatalog[n];
     row.id = `sd-row-${n}`;
-    row.className = 'sd-row' + (on ? '' : ' sd-row--off') + (_sdSel.has(n) ? ' sd-row--sel' : '') + (mem.has(n) ? ' sd-row--mem' : '');
-    row.innerHTML = `<span class="sd-row-num">${n}</span>`
-      + `<span class="sd-row-t">Shlok ${n}${on ? '' : ' · coming soon'}</span>`
-      + '<span class="sd-row-mdot"></span><span class="sd-row-selc"></span>';
-    if (on) sdWireHold(row, n);
+    row.className = 'sd-row2' + (sel ? ' sd-row--sel' : '') + (mem.has(n) ? ' sd-row--mem' : '');
+    row.innerHTML = `
+      <div class="sd-row-head">
+        <span class="sd-row-mdot2"></span>
+        <span class="sd-row-numwrap"><span class="sd-row-eyebrow">Shlok</span><span class="sd-row-num2">${n}</span></span>
+        <span class="sd-row-sp"></span>
+        <button class="sd-row-select">${sel ? '✓ Queued' : 'Select'}</button>
+        <span class="sd-row-chev"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+      </div>
+      <div class="sd-xp-wrap"><div class="sd-xp"></div></div>`;
+    const head = row.querySelector('.sd-row-head');
+    // hold = memorize (400ms per browse spec)
+    let holdT = null, held = false;
+    const down = () => { held = false; holdT = setTimeout(() => { held = true; sdToggleMem(n); }, 400); };
+    const up = () => clearTimeout(holdT);
+    head.addEventListener('touchstart', down, { passive: true });
+    head.addEventListener('mousedown', down);
+    ['touchend', 'touchcancel', 'mouseup', 'mouseleave'].forEach((ev) => head.addEventListener(ev, up));
+    head.addEventListener('contextmenu', (e) => e.preventDefault());
+    head.addEventListener('click', (e) => {
+      if (held) { held = false; return; }
+      if (e.target.closest('.sd-row-select')) return;
+      sdToggleRow(n);
+    });
+    row.querySelector('.sd-row-select').addEventListener('click', (e) => {
+      e.stopPropagation();
+      _sdSel.has(n) ? _sdSel.delete(n) : _sdSel.add(n);
+      sdUpdateRowEl(n); sdUpdateSectionHead(sdSectionStart(n)); sdRenderHeader();
+    });
     return row;
+  }
+  function sdToggleMem(num) {
+    const mem = sdMem();
+    mem.has(num) ? mem.delete(num) : mem.add(num);
+    sdSaveMem();
+    sdUpdateRowEl(num); sdUpdateSectionHead(sdSectionStart(num)); sdRenderHeader();
+  }
+
+  // Expanded preview panel: teal-spined well — Fraunces Sanskrit hero,
+  // Inter Gujarati/English, footnotes behind an ⓘ chip, inline play head.
+  function sdFillPanel(num, panel) {
+    const t = sdText(num);
+    if (!t) { panel.innerHTML = '<div class="sd-xp-none">Text coming soon</div>'; return; }
+    const verse = (t.sanskrit || []).map((l) => `<div class="sd-xp-verse-line">${escapeHtml(l)}</div>`).join('');
+    const notes = [...(t.engFoot || []), ...(t.gujFoot || [])];
+    panel.innerHTML = `
+      <div class="sd-xp-playrow">
+        <span class="sd-xp-eyebrow sd-xp-eyebrow--skt">Sanskrit</span>
+        <span class="sd-xp-sp"></span>
+        <span class="sd-xp-langlab">${_sdLang === 'gujarati' ? 'ગુજરાતી' : 'Sanskrit'}</span>
+        <button class="sd-xp-play" aria-label="Play shlok ${num}">
+          <svg class="sd-xp-play-ic" viewBox="0 0 15 16" width="13" height="14" fill="currentColor"><path d="M2 1.5v13l11-6.5z"/></svg>
+          <svg class="sd-xp-pause-ic" viewBox="0 0 24 24" width="13" height="14" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+        </button>
+      </div>
+      <div class="sd-xp-verse">${verse}</div>
+      <div class="sd-xp-eyebrow sd-xp-eyebrow--guj">Gujarati</div>
+      <div class="sd-xp-guj">${escapeHtml(t.gujarati || '')}</div>
+      <div class="sd-xp-eyebrow sd-xp-eyebrow--eng">English</div>
+      <div class="sd-xp-eng">${escapeHtml(t.english || '')}</div>
+      ${notes.length ? `<button class="sd-xp-notes-chip">ⓘ ${notes.length} note${notes.length > 1 ? 's' : ''}</button>
+      <div class="sd-xp-notes hidden">${notes.map((x) => `<div>${escapeHtml(x)}</div>`).join('')}</div>` : ''}`;
+    panel.querySelector('.sd-xp-play').addEventListener('click', (e) => {
+      e.stopPropagation();
+      sdPreviewToggle(num, panel);
+    });
+    const chip = panel.querySelector('.sd-xp-notes-chip');
+    if (chip) chip.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const nb = panel.querySelector('.sd-xp-notes');
+      nb.classList.toggle('hidden');
+      // re-measure the open row so the notes fit inside the animated wrap
+      const wrap = panel.parentElement;
+      if (wrap.style.height !== '' && wrap.style.height !== '0px') wrap.style.height = 'auto';
+    });
+  }
+
+  function sdToggleRow(num) {
+    const row = $(`sd-row-${num}`);
+    if (!row) return;
+    const wrap = row.querySelector('.sd-xp-wrap');
+    const panel = row.querySelector('.sd-xp');
+    const open = !_sdRowOpen.has(num);
+    if (open) {
+      _sdRowOpen.add(num);
+      if (!panel.childElementCount) sdFillPanel(num, panel);
+      sdRefreshPanelLang(row, num);
+      row.classList.add('sd-row--open');
+      wrap.style.height = `${panel.scrollHeight}px`;
+      const done = (e) => { if (e.target === wrap && _sdRowOpen.has(num)) wrap.style.height = 'auto'; wrap.removeEventListener('transitionend', done); };
+      wrap.addEventListener('transitionend', done);
+    } else {
+      _sdRowOpen.delete(num);
+      wrap.style.height = `${panel.scrollHeight}px`;
+      requestAnimationFrame(() => requestAnimationFrame(() => { wrap.style.height = '0px'; }));
+      row.classList.remove('sd-row--open');
+    }
+  }
+  function sdRefreshPanelLang(row, num) {
+    const lab = row.querySelector('.sd-xp-langlab');
+    if (lab) lab.textContent = _sdLang === 'gujarati' ? 'ગુજરાતી' : 'Sanskrit';
+    row.querySelector('.sd-xp-play')?.classList.toggle('sd-xp-play--on', _sdMode === 'preview' && _sdPreviewNum === num && !sdAudioEl().paused);
   }
 
   function sdToggleSection(start, forceOpen) {
@@ -3719,12 +3848,12 @@
     const head = $(`sd-sechead-${start}`);
     if (!body || !head) return;
     const open = forceOpen === true ? true : (forceOpen === false ? false : !_sdOpen.has(start));
-    if (open === _sdOpen.has(start) && body.childElementCount > 0 === open) { /* no-op */ }
     if (open) {
       _sdOpen.add(start);
       if (!body.childElementCount) sdSectionIds(start).forEach((n) => body.appendChild(sdBuildRow(n)));
     } else {
       _sdOpen.delete(start);
+      sdSectionIds(start).forEach((n) => _sdRowOpen.delete(n));
       body.innerHTML = '';
     }
     head.classList.toggle('sd-sechead--open', open);
@@ -3733,35 +3862,28 @@
   function sdRenderSections() {
     const host = $('sd-sections');
     if (!host) return;
-    if (!_sdCatalog) { host.innerHTML = '<div class="sd-empty">Loading shloks…</div>'; return; }
     host.dataset.ready = '1';
     const frag = document.createDocumentFragment();
     for (let start = 1; start <= SD_TOTAL; start += 10) {
       const end = Math.min(start + 9, SD_TOTAL);
       const ids = sdSectionIds(start);
-      const avail = ids.filter((n) => _sdCatalog[n]);
-
       const head = document.createElement('div');
       head.className = 'sd-sechead' + (_sdOpen.has(start) ? ' sd-sechead--open' : '');
       head.id = `sd-sechead-${start}`;
       head.innerHTML = '<span class="sd-sechead-chev"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>'
         + `<span class="sd-sechead-t">Shloks ${start} – ${end}</span>`
-        + '<span class="sd-sechead-r"><span class="sd-sechead-m"></span>'
-        + (avail.length ? '<button class="sd-secsel"></button>' : '')
-        + '</span>';
+        + '<span class="sd-sechead-r"><span class="sd-sechead-m"></span><button class="sd-secsel"></button></span>';
       head.addEventListener('click', (e) => {
         if (e.target.closest('.sd-secsel')) return; // Select acts, never collapses
         sdToggleSection(start);
       });
-      const selBtn = head.querySelector('.sd-secsel');
-      if (selBtn) selBtn.addEventListener('click', () => {
-        const all = avail.every((n) => _sdSel.has(n));
-        ids.forEach((n) => { if (!_sdCatalog[n]) return; all ? _sdSel.delete(n) : _sdSel.add(n); });
+      head.querySelector('.sd-secsel').addEventListener('click', () => {
+        const all = ids.every((n) => _sdSel.has(n));
+        ids.forEach((n) => { all ? _sdSel.delete(n) : _sdSel.add(n); });
         ids.forEach(sdUpdateRowEl);
         sdUpdateSectionHead(start); sdRenderHeader();
       });
       frag.appendChild(head);
-
       const body = document.createElement('div');
       body.className = 'sd-secbody';
       body.id = `sd-secbody-${start}`;
@@ -3769,7 +3891,6 @@
     }
     host.innerHTML = '';
     host.appendChild(frag);
-    // Stamp counts/labels + refill any sections the user had expanded.
     for (let start = 1; start <= SD_TOTAL; start += 10) {
       sdUpdateSectionHead(start);
       if (_sdOpen.has(start)) sdToggleSection(start, true);
@@ -3779,7 +3900,7 @@
   function sdGotoShlok() {
     const v = parseInt($('sd-goto-input').value, 10);
     if (!v || v < 1 || v > SD_TOTAL) return;
-    sdToggleSection(sdSectionStart(v), true); // expand the target's section first
+    sdToggleSection(sdSectionStart(v), true);
     const row = $(`sd-row-${v}`);
     if (!row) return;
     row.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -3788,139 +3909,165 @@
     row.classList.add('sd-row--flash');
   }
 
-  // ── Player ────────────────────────────────────────────────────────
-  const sdVideo = () => $('sd-video');
-  function sdVideoPlaying() {
-    const v = sdVideo();
-    return !!v && !v.paused && !$('sd-player').classList.contains('hidden');
+  // ── Shared audio engine (one element, two heads) ───────────────────
+  const sdAudioEl = () => $('sd-audio');
+  function sdAudioPlaying() {
+    const a = sdAudioEl();
+    return !!a && !a.paused;
   }
-  // Another source (music/TTS/audiobook) started: pause the chant + show veil.
+  // Another source (music/TTS/audiobook) started: stop whatever sd is doing.
   function sdPauseFromFocus() {
-    const v = sdVideo();
-    if (v) v.pause();
-    if (!$('sd-player').classList.contains('hidden')) sdShowVeil(true);
+    const a = sdAudioEl();
+    if (a) a.pause();
+    sdSyncPlayUi();
+  }
+  function sdSyncPlayUi() {
+    const playing = sdAudioPlaying();
+    $('sd-player').classList.toggle('sd-playing', playing && _sdMode === 'player');
+    const pp = $('sd-pp');
+    if (pp) pp.classList.toggle('sd-pp--playing', playing && _sdMode === 'player');
+    document.querySelectorAll('.sd-xp-play--on').forEach((b) => b.classList.remove('sd-xp-play--on'));
+    if (_sdMode === 'preview' && playing && _sdPreviewNum) {
+      const row = $(`sd-row-${_sdPreviewNum}`);
+      row?.querySelector('.sd-xp-play')?.classList.add('sd-xp-play--on');
+    }
+  }
+
+  // Row preview: same engine, lightweight head.
+  function sdPreviewToggle(num, panel) {
+    const a = sdAudioEl();
+    if (_sdMode === 'preview' && _sdPreviewNum === num && !a.paused) {
+      a.pause(); sdSyncPlayUi(); return;
+    }
+    _sdMode = 'preview'; _sdPreviewNum = num;
+    a.loop = false;
+    a.src = sdAudioUrl(num);
+    a.playbackRate = _sdSpeed;
+    a.play().catch(() => toast('Couldn’t play — check your connection'));
+    sdSyncPlayUi();
   }
 
   async function sdAcquireWakeLock() {
     try {
       if ('wakeLock' in navigator) _sdWakeLock = await navigator.wakeLock.request('screen');
-    } catch {} // denied/unsupported: inline video usually holds iOS awake anyway
+    } catch {}
   }
   function sdReleaseWakeLock() {
     try { if (_sdWakeLock) { _sdWakeLock.release(); _sdWakeLock = null; } } catch {}
   }
   document.addEventListener('visibilitychange', () => {
-    // Screen wake locks auto-release on background; re-acquire when we return
-    // mid-session (the OS shows the video paused state otherwise).
     if (document.visibilityState === 'visible' && !$('sd-player').classList.contains('hidden')) sdAcquireWakeLock();
   });
 
+  // ── Fullscreen player (player consult 2026-07-27) ──────────────────
   function sdStartQueue() {
-    const queue = [..._sdSel].filter((n) => _sdCatalog && _sdCatalog[n]).sort((a, b) => +a - +b);
+    const queue = [..._sdSel].sort((a, b) => +a - +b);
     if (!queue.length) return;
     _sdQueue = queue; _sdQi = 0;
-    logActivity('learn', `Mukhpath practice: ${queue.length} shlok${queue.length === 1 ? '' : 's'} ×${_sdRepeat || '∞'}`);
+    logActivity('learn', `Mukhpath practice: ${queue.length} shlok${queue.length === 1 ? '' : 's'} ×${_sdRepeat || '∞'} · ${_sdLang}`);
     $('sd-player').classList.remove('hidden');
     document.body.classList.add('sd-player-open');
     sdAcquireWakeLock();
     sdLoadShlok();
   }
 
-  // 12s watchdog (music-player convention): a stream that never starts must
-  // surface an error, not an eternal spinner (found via the 2026-07-20 Drive
-  // IP-block incident — music toasted, sd spun silently).
   let _sdWatchT = null;
   function sdArmWatchdog() {
     clearTimeout(_sdWatchT);
     _sdWatchT = setTimeout(() => {
-      const v = sdVideo();
-      if (!v || !v.paused || $('sd-player').classList.contains('hidden')) return;
+      const a = sdAudioEl();
+      if (!a || !a.paused || $('sd-player').classList.contains('hidden')) return;
       $('sd-spin').classList.add('hidden');
       toast('Couldn’t play this shlok — check your connection');
-      sdShowVeil(true); // ▶ on the veil is the retry affordance
+      sdSyncPlayUi();
     }, 12000);
   }
 
   function sdLoadShlok() {
-    clearTimeout(_sdBreathT);
-    _sdRound = 1;
-    sdHideBreath(); sdShowVeil(false);
-    const v = sdVideo();
+    _sdMode = 'player';
+    _sdRound = 1; _sdLastT = 0;
+    const a = sdAudioEl();
     const num = _sdQueue[_sdQi];
     $('sd-spin').classList.remove('hidden');
     sdArmWatchdog();
-    _sdSeekTo = sdStartTime(num); // applied on loadedmetadata (can't seek before)
-    // #284-style videos have no separate full-chant section (SD_META -1):
-    // when the parent asked to skip line repeats, say why we can't — gently.
-    const noFullChant = window.SD_META && window.SD_META[num] === -1;
-    const poster = $('sd-poster');
-    if (poster) {
-      const still = !_sdRepeatLines && SD_STILL_POSTER[num];
-      if (still) { poster.src = still; poster.classList.remove('hidden'); }
-      else { poster.classList.add('hidden'); poster.removeAttribute('src'); }
-    }
-    const notice = $('sd-notice');
-    clearTimeout(_sdNoticeT);
-    if (notice) {
-      if (!_sdRepeatLines && noFullChant) {
-        notice.textContent = 'This shlok is chanted line by line all the way through — enjoy it in full';
-        notice.classList.remove('hidden');
-        _sdNoticeT = setTimeout(() => notice.classList.add('hidden'), 4500);
-      } else {
-        notice.classList.add('hidden');
-      }
-    }
-    v.src = sdVideoUrl(num) + (_sdSeekTo ? `#t=${_sdSeekTo}` : '');
-    const p = v.play();
-    if (p && p.catch) p.catch(() => { sdShowVeil(true); }); // autoplay veto → veil offers Play
-    sdUpdateCounter();
+    sdRenderPlayerText(num);
+    // Gapless rounds: native loop while more rounds remain; wraps are counted
+    // on timeupdate. The final round runs with loop=false so 'ended' fires.
+    a.loop = _sdRepeat === 0 || _sdRepeat > 1;
+    a.src = sdAudioUrl(num);
+    a.playbackRate = _sdSpeed;
+    const p = a.play();
+    if (p && p.catch) p.catch(() => { sdSyncPlayUi(); });
+    sdUpdateChips();
   }
 
-  function sdUpdateCounter() {
-    const r = _sdRepeat === 0 ? `${_sdRound}/∞` : `${_sdRound}/${_sdRepeat}`;
-    $('sd-counter').innerHTML = `${r} <span>· ${_sdQi + 1} of ${_sdQueue.length}</span>`;
-    $('sd-veil-round').textContent = `Paused · Round ${_sdRound}${_sdRepeat ? ` of ${_sdRepeat}` : ''} · Shlok ${_sdQueue[_sdQi]}`;
+  function sdRenderPlayerText(num) {
+    const t = sdText(num) || { sanskrit: [], gujarati: '', english: '', engFoot: [], gujFoot: [] };
+    $('sd-seal').textContent = num;
+    $('sd-fs-verse').innerHTML = (t.sanskrit || []).map((l) => `<div>${escapeHtml(l)}</div>`).join('');
+    $('sd-fs-guj').textContent = t.gujarati || '';
+    $('sd-fs-eng').textContent = t.english || '';
+    const notes = [...(t.engFoot || []), ...(t.gujFoot || [])];
+    $('sd-fs-notes').innerHTML = notes.map((x) => `<div>${escapeHtml(x)}</div>`).join('');
+    $('sd-fs-notes').classList.toggle('hidden', !notes.length);
+    $('sd-hairline').style.width = '0%';
+    sdFit();
+  }
+
+  // One-screen fit: scale tiers 1 → 0.92 → 0.85 → 0.78, then footnotes
+  // collapse, then English scrolls. Sanskrit never yields.
+  function sdFit() {
+    const fit = $('sd-fs-fit'), box = $('sd-fs-scroll');
+    if (!fit || !box) return;
+    fit.classList.remove('sd-fs--notes-collapsed', 'sd-fs--eng-scroll');
+    for (const t of [1, 0.92, 0.85, 0.78]) {
+      fit.style.setProperty('--sd-scale', t);
+      if (fit.scrollHeight <= box.clientHeight + 2) return;
+    }
+    fit.classList.add('sd-fs--notes-collapsed');
+    if (fit.scrollHeight <= box.clientHeight + 2) return;
+    fit.classList.add('sd-fs--eng-scroll');
+  }
+
+  function sdUpdateChips() {
+    const chip = $('sd-round-chip');
+    if (_sdRepeat === 1) chip.classList.add('hidden');
+    else {
+      chip.classList.remove('hidden');
+      $('sd-round-txt').textContent = _sdRepeat === 0 ? `Round ${_sdRound} · ∞` : `Round ${_sdRound} of ${_sdRepeat}`;
+    }
+    $('sd-queue-pill').textContent = `${_sdQi + 1} / ${_sdQueue.length}`;
     $('sd-prev').disabled = _sdQi === 0;
     $('sd-next').disabled = _sdQi >= _sdQueue.length - 1;
+    sdSyncPlayUi();
   }
 
-  function sdShowBreath(big, small, handoff) {
-    $('sd-breath-r').textContent = big;
-    $('sd-breath-s').textContent = small;
-    $('sd-breath-rule').classList.toggle('hidden', !handoff);
-    $('sd-breath').classList.remove('hidden');
+  function sdOnTimeUpdate() {
+    if (_sdMode !== 'player') return;
+    const a = sdAudioEl();
+    if (!a.duration) return;
+    // wrap = a native loop restarted → a new round began, no gap
+    if (a.loop && a.currentTime + 1 < _sdLastT) {
+      _sdRound += 1;
+      if (_sdRepeat !== 0 && _sdRound >= _sdRepeat) a.loop = false; // final round → let 'ended' fire
+      sdUpdateChips();
+    }
+    _sdLastT = a.currentTime;
+    $('sd-hairline').style.width = `${Math.min(100, (a.currentTime / a.duration) * 100).toFixed(2)}%`;
   }
-  function sdHideBreath() { $('sd-breath').classList.add('hidden'); }
 
   function sdOnEnded() {
-    const last = _sdRepeat !== 0 && _sdRound >= _sdRepeat;
-    if (!last) {
-      _sdRound += 1;
-      sdShowBreath(`Round ${_sdRound}${_sdRepeat ? ` of ${_sdRepeat}` : ''}`, 'breathe in · here it comes again', false);
-      _sdBreathT = setTimeout(() => {
-        sdHideBreath();
-        const v = sdVideo(); v.currentTime = sdStartTime(_sdQueue[_sdQi]); v.play().catch(() => sdShowVeil(true));
-        sdUpdateCounter();
-      }, 2000);
-      return;
-    }
-    if (_sdQi < _sdQueue.length - 1) {
-      sdShowBreath(`Next · Shlok ${_sdQueue[_sdQi + 1]}`, 'same rhythm · keep chanting', true);
-      _sdBreathT = setTimeout(() => { _sdQi += 1; sdLoadShlok(); }, 2000);
-    } else {
-      sdShowBreath('Practice done', 'back to your shloks', true);
-      _sdBreathT = setTimeout(() => sdClosePlayer(), 1800);
-    }
+    if (_sdMode === 'preview') { sdSyncPlayUi(); return; }
+    if (_sdQi < _sdQueue.length - 1) { _sdQi += 1; sdLoadShlok(); }
+    else sdClosePlayer();
   }
 
-  function sdShowVeil(show) {
-    $('sd-veil').classList.toggle('hidden', !show);
-  }
   function sdTogglePause() {
-    const v = sdVideo();
-    if (!$('sd-breath').classList.contains('hidden')) return; // breath beats aren't interactive
-    if (v.paused) { v.play().catch(() => {}); sdShowVeil(false); }
-    else { v.pause(); sdShowVeil(true); }
+    const a = sdAudioEl();
+    if (_sdMode !== 'player') return;
+    if (a.paused) a.play().catch(() => {});
+    else a.pause();
+    sdSyncPlayUi();
   }
   function sdJump(dir) {
     const t = _sdQi + dir;
@@ -3928,61 +4075,53 @@
     _sdQi = t;
     sdLoadShlok();
   }
+  function sdSetSpeed(r) {
+    _sdSpeed = r;
+    try { localStorage.setItem('drift.sdSpeed', String(r)); } catch {}
+    const a = sdAudioEl();
+    if (a) a.playbackRate = r;
+    document.querySelectorAll('#sd-speed button').forEach((b) =>
+      b.classList.toggle('active', parseFloat(b.dataset.rate) === r));
+  }
   function sdClosePlayer() {
-    clearTimeout(_sdBreathT); clearTimeout(_sdWatchT); clearTimeout(_sdNoticeT);
-    const notice = $('sd-notice'); if (notice) notice.classList.add('hidden');
-    const poster = $('sd-poster'); if (poster) { poster.classList.add('hidden'); poster.removeAttribute('src'); }
-    const v = sdVideo();
-    try { v.pause(); v.removeAttribute('src'); v.load(); } catch {}
+    clearTimeout(_sdWatchT);
+    const a = sdAudioEl();
+    try { a.pause(); a.loop = false; a.removeAttribute('src'); a.load(); } catch {}
+    _sdMode = null;
     $('sd-player').classList.add('hidden');
     document.body.classList.remove('sd-player-open');
-    sdHideBreath(); sdShowVeil(false);
     sdReleaseWakeLock();
     sdRenderHeader(); // tracker is the quiet payoff on return
   }
 
   function setupSdPlayer() {
-    const v = sdVideo();
-    if (!v) return;
-    v.addEventListener('play', () => {
+    const a = sdAudioEl();
+    if (!a) return;
+    a.addEventListener('play', () => {
       stopAllOtherAudio('sd'); // chant never competes — music/TTS/audiobook pause
       $('sd-spin').classList.add('hidden');
+      sdSyncPlayUi();
     });
-    v.addEventListener('playing', () => { $('sd-spin').classList.add('hidden'); clearTimeout(_sdWatchT); });
-    v.addEventListener('waiting', () => { $('sd-spin').classList.remove('hidden'); sdArmWatchdog(); });
-    // Belt-and-braces for the #t= media fragment: some WebViews ignore it,
-    // so assert the seek once metadata (and thus seekability) arrives.
-    v.addEventListener('loadedmetadata', () => {
-      if (_sdSeekTo > 0 && Math.abs(v.currentTime - _sdSeekTo) > 1) v.currentTime = _sdSeekTo;
-    });
-    v.addEventListener('ended', sdOnEnded);
-    v.addEventListener('error', () => {
+    a.addEventListener('playing', () => { $('sd-spin').classList.add('hidden'); clearTimeout(_sdWatchT); });
+    a.addEventListener('waiting', () => { if (_sdMode === 'player') { $('sd-spin').classList.remove('hidden'); sdArmWatchdog(); } });
+    a.addEventListener('pause', sdSyncPlayUi);
+    a.addEventListener('timeupdate', sdOnTimeUpdate);
+    a.addEventListener('ended', sdOnEnded);
+    a.addEventListener('error', () => {
+      if (!a.getAttribute('src')) return; // teardown, not a real error
       $('sd-spin').classList.add('hidden');
       toast('Couldn’t play this shlok — check your connection');
-      sdShowVeil(true);
+      sdSyncPlayUi();
     });
-    // Whole-screen tap = pause-and-say (controls stop their own propagation).
-    $('sd-player').addEventListener('click', (e) => {
-      if (e.target.closest('.sd-amb, .sd-veil-side, .sd-veil-main, .sd-veil-restart')) return;
-      sdTogglePause();
-    });
-    $('sd-exit').addEventListener('click', (e) => { e.stopPropagation(); sdClosePlayer(); });
-    $('sd-pp').addEventListener('click', (e) => { e.stopPropagation(); sdTogglePause(); });
-    $('sd-prev').addEventListener('click', (e) => { e.stopPropagation(); sdJump(-1); });
-    $('sd-next').addEventListener('click', (e) => { e.stopPropagation(); sdJump(1); });
-    $('sd-veil-play').addEventListener('click', (e) => { e.stopPropagation(); sdTogglePause(); });
-    $('sd-veil-prev').addEventListener('click', (e) => { e.stopPropagation(); sdJump(-1); });
-    $('sd-veil-next').addEventListener('click', (e) => { e.stopPropagation(); sdJump(1); });
-    $('sd-veil-restart').addEventListener('click', (e) => {
-      e.stopPropagation();
-      _sdRound = 1;
-      const vv = sdVideo(); vv.currentTime = sdStartTime(_sdQueue[_sdQi]); vv.play().catch(() => {});
-      sdShowVeil(false); sdUpdateCounter();
-    });
-    $('sd-lines-toggle').addEventListener('click', () => {
-      _sdRepeatLines = !_sdRepeatLines;
-      try { localStorage.setItem('drift.sdRepeatLines', _sdRepeatLines ? '1' : '0'); } catch {}
-      sdRenderHeader();
+    $('sd-exit').addEventListener('click', () => sdClosePlayer());
+    $('sd-pp').addEventListener('click', () => sdTogglePause());
+    $('sd-prev').addEventListener('click', () => sdJump(-1));
+    $('sd-next').addEventListener('click', () => sdJump(1));
+    document.querySelectorAll('#sd-speed button').forEach((b) =>
+      b.addEventListener('click', () => sdSetSpeed(parseFloat(b.dataset.rate))));
+    sdSetSpeed(_sdSpeed);
+    window.addEventListener('resize', () => {
+      if (!$('sd-player').classList.contains('hidden')) sdFit();
     });
     // Hub statics
     $('sd-hub-back').addEventListener('click', () => switchTab('stories'));
@@ -3997,6 +4136,15 @@
         _sdRepeat = parseInt(b.dataset.n, 10);
         try { localStorage.setItem('drift.sdRepeat', String(_sdRepeat)); } catch {}
         sdRenderHeader();
+      });
+    });
+    document.querySelectorAll('#sd-lang-seg button').forEach((b) => {
+      b.addEventListener('click', () => {
+        _sdLang = b.dataset.lang === 'gujarati' ? 'gujarati' : 'sanskrit';
+        try { localStorage.setItem('drift.sdLang', _sdLang); } catch {}
+        sdRenderHeader();
+        // open rows show the language on their play heads — refresh them
+        _sdRowOpen.forEach((n) => { const r = $(`sd-row-${n}`); if (r) sdRefreshPanelLang(r, n); });
       });
     });
     $('sd-clear').addEventListener('click', () => { _sdSel.clear(); sdRenderSections(); sdRenderHeader(); });
