@@ -285,6 +285,24 @@ When the user says anything like "build for iOS submission", "archive for App St
   union-merge, write-guards); `drift.sdRepeat`/`sdLang`/`sdSpeed`
   local-only; selection session-only. Back: goBack closes #sd-player
   first. Wake lock: navigator.wakeLock + visibilitychange re-acquire.
+  **Hero-follows-the-ear** (committee 2026-07-27, 4 lenses + chair): the
+  hero card/seal/saffron eyebrow/hairline belong to the CHANTED language
+  (_sdLang), not to Sanskrit — one template, four slots (hero → companion
+  scripture → English → notes); switching language swaps occupants, never
+  structure. Gujarati hero = prose mode (.sd-fs-verse--prose 21px, --long
+  18px when >220 chars, 41 entries); companion (#sd-fs-sub) is Fraunces
+  16px 0.72 ("if it can be chanted it's Fraunces; if it explains it's
+  sans"); English 15px. white-space:pre-line everywhere (entries
+  19/64/65/73 embed mantra \n — #65's Ahvan Mantra now renders its
+  breaks). Fit ladder gained .sd-fs--comp-clamp (companion 96px mask)
+  between notes-collapse and eng-scroll; the chanted text never yields.
+  Browse panels mirror (lead = selected lang, .sd-xp-sub; langlab
+  deleted); hub lang switch stops any playing preview + fully refills
+  open panels. Preview audio ALWAYS 1× — _sdSpeed is player-only (owner
+  2026-07-27). Verified worst cases at 390×844: #113 both langs (0.78
+  tier, fits), #65 (max notes), #150 (3 notes), #311 (545-char English).
+  Rejected + recorded: hiding the companion, twin heroes, in-player lang
+  toggle, "Meaning" label, motion package (deferred to its own consult).
   NOT yet done: msClaim('sd') lock-screen identity, ghanti tick/haptics.
 - **Nitya reorder** (Edit mode, 2026-07-27): `nityaWireDrag` — right-edge ≡
   handle per row (only visible in `.nitya-editing`), Pointer Events +

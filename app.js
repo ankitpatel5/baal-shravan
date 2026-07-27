@@ -2757,19 +2757,21 @@
         handle.removeEventListener('pointercancel', drop);
         row.classList.add('nitya-settle');   // restores the springy transition, keeps the lift
         row.style.transform = `translateY(${(to - from) * step}px) scale(1)`;
+        // Commit state at finger-lift, NOT after the settle animation — a Done
+        // tap inside the settle window must flush the already-reordered array.
+        if (to !== from) {
+          const ids = rows.map((r) => r.dataset.nityaId);
+          const [moved] = ids.splice(from, 1);
+          ids.splice(to, 0, moved);
+          const arr = state.nitya || [];
+          const byId = {};
+          arr.forEach((x) => { if (x && x.id) byId[x.id] = x; });
+          // reordered visible rows first, then any entries hidden by library filtering
+          state.nitya = ids.map((id) => byId[id]).filter(Boolean)
+            .concat(arr.filter((x) => x && x.id && !ids.includes(x.id)));
+          _nityaDirty = true;
+        }
         setTimeout(() => {
-          if (to !== from) {
-            const ids = rows.map((r) => r.dataset.nityaId);
-            const [moved] = ids.splice(from, 1);
-            ids.splice(to, 0, moved);
-            const arr = state.nitya || [];
-            const byId = {};
-            arr.forEach((x) => { if (x && x.id) byId[x.id] = x; });
-            // reordered visible rows first, then any entries hidden by library filtering
-            state.nitya = ids.map((id) => byId[id]).filter(Boolean)
-              .concat(arr.filter((x) => x && x.id && !ids.includes(x.id)));
-            _nityaDirty = true;
-          }
           _nityaDragging = false;
           renderNitya();                     // rebuild clean — drops every inline transform
         }, 200);
@@ -3782,22 +3784,25 @@
   function sdFillPanel(num, panel) {
     const t = sdText(num);
     if (!t) { panel.innerHTML = '<div class="sd-xp-none">Text coming soon</div>'; return; }
-    const verse = (t.sanskrit || []).map((l) => `<div class="sd-xp-verse-line">${escapeHtml(l)}</div>`).join('');
+    // Mirrors the player template: lead block = the language the preview will
+    // chant (committee 2026-07-27), the other rendering follows, meaning last.
+    const guj = _sdLang === 'gujarati';
+    const sktHtml = (t.sanskrit || []).map((l) => `<div class="sd-xp-verse-line">${escapeHtml(l)}</div>`).join('');
+    const gujHtml = escapeHtml(t.gujarati || '');
     const notes = [...(t.engFoot || []), ...(t.gujFoot || [])];
     panel.innerHTML = `
       <div class="sd-xp-playrow">
-        <span class="sd-xp-eyebrow sd-xp-eyebrow--skt">Sanskrit</span>
+        <span class="sd-xp-eyebrow sd-xp-eyebrow--lead">${guj ? 'Gujarati' : 'Sanskrit'}</span>
         <span class="sd-xp-sp"></span>
-        <span class="sd-xp-langlab">${_sdLang === 'gujarati' ? 'ગુજરાતી' : 'Sanskrit'}</span>
         <button class="sd-xp-play" aria-label="Play shlok ${num}">
           <svg class="sd-xp-play-ic" viewBox="0 0 15 16" width="13" height="14" fill="currentColor"><path d="M2 1.5v13l11-6.5z"/></svg>
           <svg class="sd-xp-pause-ic" viewBox="0 0 24 24" width="13" height="14" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
         </button>
       </div>
-      <div class="sd-xp-verse">${verse}</div>
-      <div class="sd-xp-eyebrow sd-xp-eyebrow--guj">Gujarati</div>
-      <div class="sd-xp-guj">${escapeHtml(t.gujarati || '')}</div>
-      <div class="sd-xp-eyebrow sd-xp-eyebrow--eng">English</div>
+      <div class="sd-xp-verse${guj ? ' sd-xp-verse--prose' : ''}">${guj ? gujHtml : sktHtml}</div>
+      <div class="sd-xp-eyebrow">${guj ? 'Sanskrit' : 'Gujarati'}</div>
+      <div class="sd-xp-sub">${guj ? sktHtml : gujHtml}</div>
+      <div class="sd-xp-eyebrow">English</div>
       <div class="sd-xp-eng">${escapeHtml(t.english || '')}</div>
       ${notes.length ? `<button class="sd-xp-notes-chip">ⓘ ${notes.length} note${notes.length > 1 ? 's' : ''}</button>
       <div class="sd-xp-notes hidden">${notes.map((x) => `<div>${escapeHtml(x)}</div>`).join('')}</div>` : ''}`;
@@ -3838,8 +3843,6 @@
     }
   }
   function sdRefreshPanelLang(row, num) {
-    const lab = row.querySelector('.sd-xp-langlab');
-    if (lab) lab.textContent = _sdLang === 'gujarati' ? 'ગુજરાતી' : 'Sanskrit';
     row.querySelector('.sd-xp-play')?.classList.toggle('sd-xp-play--on', _sdMode === 'preview' && _sdPreviewNum === num && !sdAudioEl().paused);
   }
 
@@ -3863,6 +3866,9 @@
     const host = $('sd-sections');
     if (!host) return;
     host.dataset.ready = '1';
+    // Full rebuild renders every row collapsed — stale entries here would make
+    // sdToggleRow think those rows are open and swallow the first tap on them.
+    _sdRowOpen.clear();
     const frag = document.createDocumentFragment();
     for (let start = 1; start <= SD_TOTAL; start += 10) {
       const end = Math.min(start + 9, SD_TOTAL);
@@ -3942,7 +3948,7 @@
     _sdMode = 'preview'; _sdPreviewNum = num;
     a.loop = false;
     a.src = sdAudioUrl(num);
-    a.playbackRate = _sdSpeed;
+    a.playbackRate = 1;   // browse previews always play natural speed — _sdSpeed is a player-only setting (owner 2026-07-27)
     a.play().catch(() => toast('Couldn’t play — check your connection'));
     sdSyncPlayUi();
   }
@@ -4004,8 +4010,21 @@
   function sdRenderPlayerText(num) {
     const t = sdText(num) || { sanskrit: [], gujarati: '', english: '', engFoot: [], gujFoot: [] };
     $('sd-seal').textContent = num;
-    $('sd-fs-verse').innerHTML = (t.sanskrit || []).map((l) => `<div>${escapeHtml(l)}</div>`).join('');
-    $('sd-fs-guj').textContent = t.gujarati || '';
+    // The hero card belongs to the CHANTED language (committee 2026-07-27):
+    // whatever _sdLang selects gets the card/seal/hairline; the other
+    // rendering becomes the companion block below. One template, slots swap.
+    const guj = _sdLang === 'gujarati';
+    const verse = $('sd-fs-verse'), sub = $('sd-fs-sub');
+    const sktHtml = (t.sanskrit || []).map((l) => `<div>${escapeHtml(l)}</div>`).join('');
+    const empty = !(t.sanskrit || []).length && !t.gujarati;
+    $('sd-fs-hero-lang').textContent = guj ? 'Gujarati' : 'Sanskrit';
+    $('sd-fs-sub-lang').textContent = guj ? 'Sanskrit' : 'Gujarati';
+    verse.classList.toggle('sd-fs-verse--prose', guj && !empty);
+    verse.classList.toggle('sd-fs-verse--long', guj && (t.gujarati || '').length > 220);
+    $('sd-fs-fit').classList.toggle('sd-fs--nodata', empty);
+    if (empty) { verse.innerHTML = '<span class="sd-fs-soon">Text coming soon</span>'; sub.textContent = ''; }
+    else if (guj) { verse.textContent = t.gujarati || ''; sub.innerHTML = sktHtml; }
+    else { verse.innerHTML = sktHtml; sub.textContent = t.gujarati || ''; }
     $('sd-fs-eng').textContent = t.english || '';
     const notes = [...(t.engFoot || []), ...(t.gujFoot || [])];
     $('sd-fs-notes').innerHTML = notes.map((x) => `<div>${escapeHtml(x)}</div>`).join('');
@@ -4015,16 +4034,19 @@
   }
 
   // One-screen fit: scale tiers 1 → 0.92 → 0.85 → 0.78, then footnotes
-  // collapse, then English scrolls. Sanskrit never yields.
+  // collapse, then the companion clamps, then English scrolls. The CHANTED
+  // text never yields — it only walks the scale tiers, never clips.
   function sdFit() {
     const fit = $('sd-fs-fit'), box = $('sd-fs-scroll');
     if (!fit || !box) return;
-    fit.classList.remove('sd-fs--notes-collapsed', 'sd-fs--eng-scroll');
+    fit.classList.remove('sd-fs--notes-collapsed', 'sd-fs--comp-clamp', 'sd-fs--eng-scroll');
     for (const t of [1, 0.92, 0.85, 0.78]) {
       fit.style.setProperty('--sd-scale', t);
       if (fit.scrollHeight <= box.clientHeight + 2) return;
     }
     fit.classList.add('sd-fs--notes-collapsed');
+    if (fit.scrollHeight <= box.clientHeight + 2) return;
+    fit.classList.add('sd-fs--comp-clamp');
     if (fit.scrollHeight <= box.clientHeight + 2) return;
     fit.classList.add('sd-fs--eng-scroll');
   }
@@ -4079,7 +4101,7 @@
     _sdSpeed = r;
     try { localStorage.setItem('drift.sdSpeed', String(r)); } catch {}
     const a = sdAudioEl();
-    if (a) a.playbackRate = r;
+    if (a && _sdMode !== 'preview') a.playbackRate = r;   // previews stay at 1× always
     document.querySelectorAll('#sd-speed button').forEach((b) =>
       b.classList.toggle('active', parseFloat(b.dataset.rate) === r));
   }
@@ -4142,9 +4164,19 @@
       b.addEventListener('click', () => {
         _sdLang = b.dataset.lang === 'gujarati' ? 'gujarati' : 'sanskrit';
         try { localStorage.setItem('drift.sdLang', _sdLang); } catch {}
+        // a playing preview would keep chanting the OLD language — stop it
+        const a = sdAudioEl();
+        if (_sdMode === 'preview' && a && !a.paused) { a.pause(); sdSyncPlayUi(); }
         sdRenderHeader();
-        // open rows show the language on their play heads — refresh them
-        _sdRowOpen.forEach((n) => { const r = $(`sd-row-${n}`); if (r) sdRefreshPanelLang(r, n); });
+        // open rows REBUILD so their lead text matches the new language
+        // (the entrance stagger replays — the swap reads as a gentle settle)
+        _sdRowOpen.forEach((n) => {
+          const r = $(`sd-row-${n}`);
+          if (!r) return;
+          const panel = r.querySelector('.sd-xp');
+          if (panel) { sdFillPanel(n, panel); const w = r.querySelector('.sd-xp-wrap'); if (w) w.style.height = 'auto'; }
+          sdRefreshPanelLang(r, n);
+        });
       });
     });
     $('sd-clear').addEventListener('click', () => { _sdSel.clear(); sdRenderSections(); sdRenderHeader(); });

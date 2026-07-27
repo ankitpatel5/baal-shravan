@@ -6119,8 +6119,7 @@ body.impersonating .topbar { padding-top: 8px; height: var(--topbar-h); }
   display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
   text-transform: uppercase; color: var(--fg-3); margin: 14px 0 5px;
 }
-.sd-xp-eyebrow--skt { color: var(--learn-ink); margin: 0; display: inline; }
-.sd-xp-langlab { font-size: 11px; font-weight: 600; color: rgba(227, 200, 138, 0.45); }
+.sd-xp-eyebrow--lead { color: var(--learn-ink); margin: 0; display: inline; }
 .sd-xp-play {
   width: 36px; height: 36px; border-radius: 50%; flex: none;
   background: rgba(232, 163, 61, 0.16); border: 1.5px solid rgba(232, 163, 61, 0.6);
@@ -6132,10 +6131,15 @@ body.impersonating .topbar { padding-top: 8px; height: var(--topbar-h); }
 .sd-xp-play--on .sd-xp-pause-ic { display: block; }
 .sd-xp-verse {
   font-family: var(--font-display); font-size: 16px; font-weight: 500;
-  line-height: 26px; color: var(--fg-0);
+  line-height: 26px; color: var(--fg-0); white-space: pre-line;
 }
-.sd-xp-guj { font-size: 14px; line-height: 22px; color: var(--fg-1); }
-.sd-xp-eng { font-size: 13.5px; line-height: 21px; color: var(--fg-2); }
+.sd-xp-verse--prose { font-size: 15px; line-height: 24px; }
+/* the non-playing scripture keeps the sacred serif at supporting size */
+.sd-xp-sub {
+  font-family: var(--font-display); font-weight: 500;
+  font-size: 14px; line-height: 22px; color: var(--fg-1); white-space: pre-line;
+}
+.sd-xp-eng { font-size: 13.5px; line-height: 21px; color: var(--fg-2); white-space: pre-line; }
 .sd-xp-notes-chip {
   margin-top: 12px; background: none; border: none; padding: 0;
   font-size: 11px; font-weight: 600; color: rgba(227, 200, 138, 0.5);
@@ -6179,7 +6183,7 @@ body.impersonating .topbar { padding-top: 8px; height: var(--topbar-h); }
   font-size: 12px; font-weight: 600; color: rgba(246, 237, 224, 0.7);
   font-variant-numeric: tabular-nums;
 }
-/* center content: fit-scaled, Sanskrit inviolable */
+/* center content: fit-scaled; the CHANTED language owns the hero card and never yields */
 .sd-fs-scroll {
   flex: 1; min-height: 0; overflow: hidden;
   display: flex; flex-direction: column; justify-content: center;
@@ -6191,7 +6195,7 @@ body.impersonating .topbar { padding-top: 8px; height: var(--topbar-h); }
   letter-spacing: 1.4px; color: rgba(246, 237, 224, 0.42);
   margin: calc(16px * var(--sd-scale)) 0 calc(8px * var(--sd-scale));
 }
-.sd-fs-eyebrow--skt { color: rgba(232, 163, 61, 0.9); margin: 0; }
+.sd-fs-eyebrow--hero { color: rgba(232, 163, 61, 0.9); margin: 0; }   /* the ONLY saffron eyebrow — means "this is what you hear" */
 .sd-fs-hero {
   background: rgba(232, 163, 61, 0.05); border-radius: 16px;
   padding: calc(18px * var(--sd-scale)) 20px calc(22px * var(--sd-scale));
@@ -6206,20 +6210,34 @@ body.impersonating .topbar { padding-top: 8px; height: var(--topbar-h); }
 .sd-fs-verse {
   font-family: var(--font-display); font-weight: 500;
   font-size: calc(28px * var(--sd-scale)); line-height: 1.4; letter-spacing: -0.01em;
-  color: #f6ede0;
+  color: #f6ede0; white-space: pre-line;
 }
+/* Gujarati hero is prose, not a couplet — sacredness is carried by card +
+   Fraunces + ivory + seal, not by wearing the verse's display size */
+.sd-fs-verse--prose { font-size: calc(21px * var(--sd-scale)); line-height: 1.5; }
+.sd-fs-verse--long  { font-size: calc(18px * var(--sd-scale)); line-height: 1.55; }
+.sd-fs-soon { font-family: -apple-system, sans-serif; font-size: 14px; font-weight: 400; color: rgba(246, 237, 224, 0.5); }
+.sd-fs--nodata #sd-fs-sub-lang, .sd-fs--nodata .sd-fs-sub,
+.sd-fs--nodata #sd-fs-eng-lab, .sd-fs--nodata .sd-fs-eng-wrap { display: none; }
 .sd-hairline-track {
   height: 2px; border-radius: 1px; background: rgba(246, 237, 224, 0.08);
   margin-top: calc(16px * var(--sd-scale));
 }
 .sd-hairline { height: 100%; width: 0%; border-radius: 1px; background: var(--accent); }
-.sd-fs-guj {
-  font-size: calc(17px * var(--sd-scale)); line-height: 1.5;
-  color: rgba(246, 237, 224, 0.82);
+/* companion = the other scripture rendering: keeps the sacred serif at supporting size */
+.sd-fs-sub {
+  font-family: var(--font-display); font-weight: 500;
+  font-size: calc(16px * var(--sd-scale)); line-height: 1.5;
+  color: rgba(246, 237, 224, 0.72); white-space: pre-line;
 }
 .sd-fs-eng {
-  font-size: calc(16px * var(--sd-scale)); line-height: 1.55;
-  color: rgba(246, 237, 224, 0.68);
+  font-size: calc(15px * var(--sd-scale)); line-height: 1.55;
+  color: rgba(246, 237, 224, 0.66); white-space: pre-line;
+}
+.sd-fs--comp-clamp .sd-fs-sub {
+  max-height: 96px; overflow: hidden;
+  -webkit-mask: linear-gradient(#000 70%, transparent);
+  mask: linear-gradient(#000 70%, transparent);
 }
 .sd-fs--eng-scroll .sd-fs-eng-wrap {
   max-height: 110px; overflow-y: auto;
