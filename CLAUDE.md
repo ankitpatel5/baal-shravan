@@ -254,7 +254,7 @@ When the user says anything like "build for iOS submission", "archive for App St
   fixes (toast z-index, row-open staleness, drag races). Web prod
   shipped same day (mysanskar.vercel.app verified). ASC web steps owed
   (owner): create 1.12, attach build, submit. After LIVE: bump
-  app-version-defaults.json ios.latest → 1.12. Motion package NOT
+  app-version-defaults.json ios.latest → 1.12 — DONE 2026-07-27 (1.12 LIVE). Motion package NOT
   included (mock-only, awaiting owner verdict).
 - 2026-07-21: **v1.11 CUT — Mukhpath 2.0 + telemetry**. iOS 1.11 (1)
   archived (bundle verified: Worker media URL, sd-meta 315, apiTally
