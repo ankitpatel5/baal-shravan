@@ -317,6 +317,33 @@ When the user says anything like "build for iOS submission", "archive for App St
   Rejected + recorded: hiding the companion, twin heroes, in-player lang
   toggle, "Meaning" label, motion package (deferred to its own consult).
   NOT yet done: msClaim('sd') lock-screen identity, ghanti tick/haptics.
+- **Practice Tracing** (Learn Gujarati · committee consult 2026-07-27, from a
+  real parent's feature request): kids finger-paint the 34 consonants.
+  `GUJ_META.tracing` (3rd hub card, hollow glyph `.guj-hub-glyph--trace`,
+  `dataKey: 'consonants'` — a verb on existing data, no new content system) →
+  `openGujSection` kind 'trace' (ghost-tile grid, kakko order, NEXT whisper
+  on first untraced, check chips) + teal "Trace" pill in each consonant's
+  detail → `openGujTrace` → `view-gujarati-trace` → `createTraceEngine`
+  (app.js): runtime glyph-mask canvas — fillText the letter on an offscreen
+  mask (binary-searched to fit the INK bbox, 78%/84% conjuncts; tofu guard
+  bails to detail view), ghost = ivory fill + teal rim (8-way offset trick,
+  brightens when finger strays), saffron brush 30-40px round clipped via
+  destination-in (paint physically can't leave the letter), 4px-grid
+  coverage on pointerup. Completion 85% (80% conjuncts,
+  AppUtils.traceThreshold) → self-fill + letter speaks (gujPlay, the whole
+  reward) + gold #e3c88a set + Gujarati praise + rotating word chip
+  (words[] per re-trace) + Next/Trace-again (AppUtils.traceNextUntraced).
+  55-84% lift → largestUnpaintedCluster pulse ("what's left?"). Progress:
+  `markGujDone('tracing', idx)` ONLY on completion (the hub's one EARNED
+  ring, "N / 34 traced") — rides gujProgress LS+Firestore untouched.
+  Integrations that MUST stay: `#guj-trace-stage` in setupSwipeBack
+  exclusions (crossbar strokes = paint, not navigate), BACK_BTN_BY_VIEW
+  entry, touch-action:none on the stage, first-pointer-capture (palm
+  rejection). getCoalescedEvents guard: empty array for synthetic events —
+  fall back to the event itself (tests + emulator drives depend on it).
+  Tests: tests/guj-trace.test.js (helpers + wiring locks). Verified on
+  emulator end-to-end 2026-07-27 (ka trace → completion → ring, conjunct
+  opens). Phase-2 socket reserved: hand-authored stroke-order paths.
 - **Nitya reorder** (Edit mode, 2026-07-27): `nityaWireDrag` — right-edge ≡
   handle per row (only visible in `.nitya-editing`), Pointer Events +
   setPointerCapture, `touch-action:none` scoped to the handle so the rest

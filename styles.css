@@ -819,6 +819,96 @@ input { font-family: inherit; color: inherit; }
   padding: 9px 18px; border-radius: 999px;
 }
 .guj-hear-btn:active { opacity: 0.9; }
+.guj-detail-pills { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.guj-trace-pill {
+  margin-top: 12px;
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--learn-soft, rgba(111, 211, 182, 0.14)); color: var(--learn-ink);
+  border: none; font-size: 13px; font-weight: 600;
+  padding: 9px 18px; border-radius: 999px;
+}
+.guj-trace-pill:active { opacity: 0.9; }
+
+/* ── Practice Tracing (committee 2026-07-27) ─────────────────────────────
+   The one hollow glyph on the hub says "fill me in"; the slate is a fixed
+   dark surface in both themes (akshararambham; additive saffron glow). */
+.guj-hub-glyph--trace { color: transparent; -webkit-text-stroke: 1.5px var(--learn-ink); }
+.guj-letter-tile--ghost .guj-letter-glyph { color: transparent; -webkit-text-stroke: 1.2px var(--learn-ink); }
+.guj-letter-tile--traced { position: relative; }
+.guj-tile-check {
+  position: absolute; top: 6px; right: 6px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--learn-soft, rgba(111, 211, 182, 0.14));
+  display: flex; align-items: center; justify-content: center;
+}
+.guj-letter-tile--next { position: relative; border: 1.5px solid rgba(111, 211, 182, 0.35); }
+.guj-tile-next-lab {
+  position: absolute; top: 6px; left: 6px;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--learn-ink);
+}
+.guj-trace-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 2px 2px 14px;
+}
+.guj-trace-id { display: flex; align-items: baseline; gap: 10px; }
+.guj-trace-glyph { font-size: 32px; font-weight: 500; color: var(--fg-0); line-height: 1; }
+.guj-trace-translit { font-size: 15px; color: var(--fg-2); }
+.guj-trace-tools { display: flex; align-items: center; gap: 10px; }
+.guj-trace-hear {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--accent); color: var(--play-btn-color); border: none;
+  display: flex; align-items: center; justify-content: center;
+}
+.guj-trace-clear {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--bg-2); color: var(--fg-2); border: none;
+  display: flex; align-items: center; justify-content: center;
+}
+#guj-trace-stage {
+  width: min(100%, 420px); margin: 0 auto;
+  aspect-ratio: 1;
+  background: #14110c;                /* fixed in BOTH themes — the slate */
+  border: 0.5px solid var(--line); border-radius: 18px;
+  touch-action: none;                 /* the finger paints; the page never scrolls from here */
+  overflow: hidden;
+}
+#guj-trace-canvas { display: block; }
+.guj-trace-caption {
+  min-height: 30px; margin-top: 14px; text-align: center;
+  font-family: var(--font-display); font-size: 18px; font-weight: 500; color: var(--fg-0);
+  opacity: 0; transition: opacity 0.3s;
+}
+.guj-trace-caption--in { opacity: 1; }
+.guj-trace-cap-sub { font-family: -apple-system, sans-serif; font-size: 13px; font-weight: 400; color: var(--fg-2); margin-left: 6px; }
+.guj-trace-word {
+  display: flex; align-items: center; gap: 10px; margin: 10px auto 0;
+  background: var(--bg-1, #161310); border: 0.5px solid var(--line); border-radius: 14px;
+  padding: 10px 16px; max-width: 420px; width: 100%;
+  animation: guj-word-in 0.3s ease-out;
+}
+.guj-trace-word.hidden { display: none; }
+@keyframes guj-word-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.guj-trace-word-guj { font-size: 17px; font-weight: 500; color: var(--fg-0); }
+.guj-trace-word-sub { flex: 1; font-size: 12.5px; color: var(--fg-2); text-align: left; }
+.guj-trace-word-play {
+  width: 30px; height: 30px; border-radius: 50%; flex: none;
+  background: rgba(232, 163, 61, 0.16); color: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+}
+.guj-trace-footer { display: flex; gap: 10px; max-width: 420px; margin: 14px auto 0; }
+.guj-trace-footer.hidden { display: none; }
+.guj-trace-next {
+  flex: 1; height: 52px; border-radius: 14px; border: none;
+  background: var(--accent); color: var(--play-btn-color);
+  font-size: 15px; font-weight: 600;
+}
+.guj-trace-again {
+  height: 52px; padding: 0 18px; border-radius: 14px;
+  background: none; border: 1px solid var(--line-2); color: var(--fg-1);
+  font-size: 14px; font-weight: 600;
+}
+.guj-trace-next:active, .guj-trace-again:active { opacity: 0.9; }
 
 /* Flashcards */
 .guj-flash {
@@ -1906,6 +1996,10 @@ body.audio-buffering .track-row.playing .playing-bars { animation: bars-preroll 
   body.audio-buffering .nitya-row-play.is-current .play-loader svg { animation: none; }
   body.audio-buffering .track-row.playing .playing-bars { animation: none; opacity: 0.6; }
   .nitya-row-play:active, .sheet-ctrl.play:active { transform: none; opacity: 0.85; }
+  /* Practice Tracing: state changes stay, motion goes (canvas side reads the
+     same media query via matchMedia in createTraceEngine) */
+  .guj-trace-word { animation: none; }
+  .guj-trace-caption { transition: none; }
 }
 .empty-state {
   text-align: center;

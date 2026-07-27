@@ -353,6 +353,34 @@
           <div id="guj-detail-body"></div>
         </section>
 
+        <!-- Learn Gujarati: Practice Tracing (finger-paint a consonant on a slate) -->
+        <section id="view-gujarati-trace" class="view hidden">
+          <button class="back-btn" id="guj-trace-back" aria-label="Back">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <div class="guj-trace-head">
+            <div class="guj-trace-id">
+              <span class="guj-trace-glyph" id="guj-trace-glyph"></span>
+              <span class="guj-trace-translit" id="guj-trace-translit"></span>
+            </div>
+            <div class="guj-trace-tools">
+              <button class="guj-trace-hear" id="guj-trace-hear" aria-label="Hear the letter">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+              </button>
+              <button class="guj-trace-clear" id="guj-trace-clear" aria-label="Start over">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></svg>
+              </button>
+            </div>
+          </div>
+          <div id="guj-trace-stage"><canvas id="guj-trace-canvas"></canvas></div>
+          <div class="guj-trace-caption" id="guj-trace-caption"></div>
+          <button class="guj-trace-word hidden" id="guj-trace-word"></button>
+          <div class="guj-trace-footer hidden" id="guj-trace-footer">
+            <button class="guj-trace-next" id="guj-trace-next"></button>
+            <button class="guj-trace-again" id="guj-trace-again">Trace again</button>
+          </div>
+        </section>
+
         <!-- Satsang Diksha Mukhpath: locked header + full 315-shlok catalog -->
         <section id="view-sd-hub" class="view hidden">
           <div class="sd-fixed">

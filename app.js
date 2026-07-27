@@ -4259,6 +4259,9 @@
   const GUJ_META = {
     vowels:     { label: 'Vowels',      kind: 'grid', glyph: 'અ',  unit: 'letters' },
     consonants: { label: 'Consonants',  kind: 'grid', glyph: 'ક',  unit: 'letters' },
+    // A verb on the consonants data, not a new content section — dataKey
+    // points the counts/grid at consonants.items (committee 2026-07-27).
+    tracing:    { label: 'Practice Tracing', kind: 'trace', glyph: 'ક', unit: 'letters', dataKey: 'consonants' },
     numbers:    { label: 'Numbers',     kind: 'grid', glyph: '૧',  unit: 'numbers' },
     vocabulary: { label: 'Vocabulary',  kind: 'grid', icon: 'books', unit: 'topics' },
     verbs:      { label: 'Verbs',       kind: 'verbs', icon: 'run',  unit: 'verbs' },
@@ -4332,7 +4335,8 @@
     return _gujProgress;
   }
   function gujTotal(key) {
-    const d = window.GUJARATI_DATA[key];
+    const meta = GUJ_META[key];
+    const d = window.GUJARATI_DATA[(meta && meta.dataKey) || key];
     return d.items ? d.items.length : d.packs ? d.packs.length : d.sets ? d.sets.length : 0;
   }
   function gujDone(key) {
@@ -4403,8 +4407,8 @@
       const unit = (m.kind === 'verbs') ? `${d.packs.reduce((n, p) => n + p.verbs.length, 0)} verbs`
         : (m.kind === 'sentences') ? `${d.sets.reduce((n, s) => n + s.rows.length, 0)} sentences`
         : `${total} ${m.unit}`;
-      const head = m.glyph ? `<span class="guj-hub-glyph">${m.glyph}</span>` : `<span class="guj-hub-ic">${GUJ_ICONS[m.icon]}</span>`;
-      const countLine = done > 0 ? `${done} / ${total} done` : unit;
+      const head = m.glyph ? `<span class="guj-hub-glyph${m.kind === 'trace' ? ' guj-hub-glyph--trace' : ''}">${m.glyph}</span>` : `<span class="guj-hub-ic">${GUJ_ICONS[m.icon]}</span>`;
+      const countLine = done > 0 ? `${done} / ${total} ${key === 'tracing' ? 'traced' : 'done'}` : unit;
       const card = document.createElement('button');
       card.className = 'guj-hub-card';
       card.innerHTML = `<span class="guj-hub-top">${head}${gujRing(total ? done / total : 0)}</span><span class="guj-hub-name">${m.label}</span><span class="guj-hub-count">${countLine}</span>`;
@@ -4441,6 +4445,25 @@
         tile.addEventListener('click', (e) => {
           if (e.target.closest('[data-audio]')) { e.stopPropagation(); gujPlay(it.audio); return; }
           openGujDetail(key, idx);
+        });
+        grid.appendChild(tile);
+      });
+      body.appendChild(grid);
+    } else if (m.kind === 'trace') {
+      sub.textContent = 'Trace each letter with your finger';
+      const items = window.GUJARATI_DATA.consonants.items;
+      const traced = new Set(ensureGujProgress().tracing || []);
+      const nextIdx = items.findIndex((_, i) => !traced.has(i));
+      const grid = document.createElement('div');
+      grid.className = 'guj-grid';
+      items.forEach((it, idx) => {
+        const isDone = traced.has(idx);
+        const tile = document.createElement('button');
+        tile.className = 'guj-letter-tile' + (isDone ? ' guj-letter-tile--traced' : ' guj-letter-tile--ghost') + (idx === nextIdx ? ' guj-letter-tile--next' : '');
+        tile.innerHTML = `<span class="guj-letter-glyph">${escapeHtml(it.gujarati)}</span><span class="guj-letter-translit">${escapeHtml(it.translit || '')}</span>${isDone ? '<span class="guj-tile-check"><svg viewBox="0 0 36 36" width="12" height="12" fill="none" stroke="var(--learn)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 18.5l5.2 5.2L26 12"/></svg></span>' : ''}${idx === nextIdx ? '<span class="guj-tile-next-lab">Next</span>' : ''}${it.audio ? `<span class="guj-letter-listen" data-audio="1">${SPEAKER}</span>` : ''}`;
+        tile.addEventListener('click', (e) => {
+          if (e.target.closest('[data-audio]')) { e.stopPropagation(); gujPlay(it.audio); return; }
+          openGujTrace(idx, 'grid');
         });
         grid.appendChild(tile);
       });
@@ -4489,10 +4512,12 @@
       const it = d.items[idx];
       const hero = document.createElement('div');
       hero.className = 'guj-detail-hero';
-      hero.innerHTML = `<div class="guj-detail-glyph">${escapeHtml(it.gujarati)}</div>${it.audio ? `<button class="guj-hear-btn" id="guj-hear">${SPEAKER}<span>Hear "${escapeHtml(it.translit || '')}"</span></button>` : ''}`;
+      hero.innerHTML = `<div class="guj-detail-glyph">${escapeHtml(it.gujarati)}</div><div class="guj-detail-pills">${it.audio ? `<button class="guj-hear-btn" id="guj-hear">${SPEAKER}<span>Hear "${escapeHtml(it.translit || '')}"</span></button>` : ''}${key === 'consonants' ? `<button class="guj-trace-pill" id="guj-trace-pill"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg><span>Trace</span></button>` : ''}</div>`;
       body.appendChild(detailHeader('', ''));
       body.appendChild(hero);
       if (it.audio) hero.querySelector('#guj-hear').addEventListener('click', () => gujPlay(it.audio));
+      const tracePill = hero.querySelector('#guj-trace-pill');
+      if (tracePill) tracePill.addEventListener('click', () => openGujTrace(idx, 'detail'));
       const grid = document.createElement('div');
       grid.className = 'guj-flash-grid';
       (it.words || []).forEach((w) => grid.appendChild(flashCard(w)));
@@ -4500,6 +4525,343 @@
     }
     switchView('view-gujarati-detail');
     $('content').scrollTo({ top: 0, behavior: 'instant' });
+  }
+
+  // ══ Practice Tracing — finger-paint a consonant on a slate ═════════════
+  // (committee consult 2026-07-27: glyph-mask canvas, saffron ink, calm gold
+  // completion. The mask means paint physically cannot exist outside the
+  // letter — every child ends with a perfect letter.)
+  let _traceIdx = 0;
+  let _traceReturn = 'grid';
+  let _traceEng = null;
+  const _traceWordRot = {};   // per-letter rotation through example words (session)
+  const TRACE_PRAISE = ['શાબાશ! Shabash!', 'સરસ! Saras!', 'વાહ! Vaah!'];
+
+  function openGujTrace(idx, from) {
+    const items = window.GUJARATI_DATA.consonants.items;
+    const it = items[idx];
+    if (!it) return;
+    _traceIdx = idx;
+    _traceReturn = from || 'grid';
+    logActivity('learn', `Learn Gujarati - Tracing ${it.translit || it.gujarati}`);
+    $('guj-trace-glyph').textContent = it.gujarati;
+    $('guj-trace-translit').textContent = it.translit || '';
+    $('guj-trace-caption').textContent = '';
+    $('guj-trace-caption').classList.remove('guj-trace-caption--in');
+    $('guj-trace-word').classList.add('hidden');
+    $('guj-trace-footer').classList.add('hidden');
+    switchView('view-gujarati-trace');
+    $('content').scrollTo({ top: 0, behavior: 'instant' });
+    // the view must be visible before the stage can be measured
+    requestAnimationFrame(() => gujTraceBoot(it));
+    setTimeout(() => gujPlay(it.audio), 350);
+  }
+
+  function gujTraceBoot(it) {
+    if (_traceEng) { _traceEng.destroy(); _traceEng = null; }
+    _traceEng = createTraceEngine($('guj-trace-canvas'), it.gujarati, {
+      threshold: window.AppUtils.traceThreshold(it.gujarati),
+      reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+      onComplete: () => gujTraceComplete(it),
+    });
+    if (_traceEng.tofu) {
+      // broken Gujarati shaping on this WebView — never present an untraceable ghost
+      _traceEng.destroy(); _traceEng = null;
+      openGujDetail('consonants', _traceIdx);
+      return;
+    }
+  }
+
+  function gujTraceComplete(it) {
+    markGujDone('tracing', _traceIdx);
+    logActivity('learn', `Traced ${it.gujarati} (${it.translit || ''})`);
+    gujPlay(it.audio);   // the letter speaks its own name — the entire reward
+    const cap = $('guj-trace-caption');
+    cap.innerHTML = `${escapeHtml(TRACE_PRAISE[_traceIdx % TRACE_PRAISE.length])} <span class="guj-trace-cap-sub">You wrote ${escapeHtml(it.gujarati)}</span>`;
+    cap.classList.add('guj-trace-caption--in');
+    setTimeout(() => {
+      const words = it.words || [];
+      if (words.length) {
+        const rot = _traceWordRot[_traceIdx] = (_traceWordRot[_traceIdx] || 0);
+        const w = words[rot % words.length];
+        _traceWordRot[_traceIdx] = rot + 1;
+        const chip = $('guj-trace-word');
+        chip.innerHTML = `<span class="guj-trace-word-guj">${escapeHtml(w.gujarati)}</span><span class="guj-trace-word-sub">${escapeHtml([w.translit, w.english].filter(Boolean).join(' · '))}</span>${w.audio ? `<span class="guj-trace-word-play">${PLAY_TRI}</span>` : ''}`;
+        chip.classList.remove('hidden');
+        chip.onclick = () => gujPlay(w.audio);
+      }
+    }, 700);
+    setTimeout(() => {
+      const items = window.GUJARATI_DATA.consonants.items;
+      const next = window.AppUtils.traceNextUntraced(ensureGujProgress().tracing, items.length, _traceIdx);
+      const nextBtn = $('guj-trace-next');
+      if (next >= 0) {
+        nextBtn.innerHTML = `Next: ${escapeHtml(items[next].gujarati)} ${escapeHtml(items[next].translit || '')}`;
+        nextBtn.onclick = () => openGujTrace(next, _traceReturn);
+      } else {
+        nextBtn.textContent = 'Trace any letter';
+        nextBtn.onclick = () => openGujSection('tracing');
+      }
+      $('guj-trace-again').onclick = () => openGujTrace(_traceIdx, _traceReturn);
+      $('guj-trace-footer').classList.remove('hidden');
+    }, 1000);
+  }
+
+  // The canvas engine. One shared pipeline: offscreen MASK (the letter's own
+  // pixels, fitted + centered), offscreen PAINT (strokes clipped to the mask
+  // via destination-in), and a composited display draw per rAF.
+  function createTraceEngine(canvas, glyph, opts) {
+    const stage = canvas.parentElement;
+    const side = Math.min(stage.clientWidth || 335, 420);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const S = Math.round(side * dpr);
+    canvas.width = S; canvas.height = S;
+    canvas.style.width = side + 'px'; canvas.style.height = side + 'px';
+    const ctx = canvas.getContext('2d');
+    const RM = !!opts.reducedMotion;
+    const brushCss = Math.max(30, Math.min(40, Math.round(side * 0.10)));
+    const brush = brushCss * dpr;
+
+    // ── mask: binary-search the font size until the INK bbox fits the box ──
+    const mask = document.createElement('canvas'); mask.width = mask.height = S;
+    const mctx = mask.getContext('2d', { willReadFrequently: true });
+    const isConjunct = glyph.includes('્');
+    const fitFrac = isConjunct ? 0.84 : 0.78;
+    const measure = (px) => {
+      mctx.clearRect(0, 0, S, S);
+      mctx.font = `${px}px "Noto Sans Gujarati", sans-serif`;
+      mctx.textAlign = 'center'; mctx.textBaseline = 'middle';
+      mctx.fillStyle = '#fff';
+      mctx.fillText(glyph, S / 2, S / 2);
+      const d = mctx.getImageData(0, 0, S, S).data;
+      let minX = S, maxX = -1, minY = S, maxY = -1;
+      for (let y = 0; y < S; y += 2) for (let x = 0; x < S; x += 2) {
+        if (d[(y * S + x) * 4 + 3] > 40) {
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+        }
+      }
+      return maxX < 0 ? null : { minX, maxX, minY, maxY, w: maxX - minX, h: maxY - minY };
+    };
+    let lo = S * 0.3, hi = S * 1.4, px = S * 0.8, box = null;
+    for (let i = 0; i < 7; i++) {
+      px = (lo + hi) / 2;
+      box = measure(px);
+      if (!box) { hi = px; continue; }
+      (Math.max(box.w, box.h) > S * fitFrac) ? hi = px : lo = px;
+    }
+    box = measure(lo);
+    if (box) {  // re-center on the ink bbox (font metrics lie for conjuncts)
+      mctx.clearRect(0, 0, S, S);
+      mctx.font = `${lo}px "Noto Sans Gujarati", sans-serif`;
+      mctx.textAlign = 'center'; mctx.textBaseline = 'middle';
+      mctx.fillStyle = '#fff';
+      mctx.fillText(glyph, S / 2 + (S / 2 - (box.minX + box.maxX) / 2), S / 2 + (S / 2 - (box.minY + box.maxY) / 2));
+    }
+    const maskData = mctx.getImageData(0, 0, S, S).data;
+
+    // sample points on a 4px grid of the mask's ink (coverage + cluster math)
+    const samples = [];
+    const step = 4 * dpr > 8 ? 8 : 4;
+    for (let y = 0; y < S; y += step) for (let x = 0; x < S; x += step) {
+      if (maskData[(y * S + x) * 4 + 3] > 128) samples.push({ x, y });
+    }
+    if (samples.length < (S * S) * 0.02 / (step * step)) {
+      return { tofu: true, destroy() {} };   // shaping produced no real ink
+    }
+    // start dot: leftmost ink pixel in the topmost 20% band of the bbox
+    const bandY = box.minY + box.h * 0.2;
+    let dot = samples[0];
+    for (const p of samples) { if (p.y <= bandY && (p.x < dot.x || dot.y > bandY)) dot = p; }
+
+    // ── ghost layers (built once): interior fill + teal rim, dim and bright ──
+    const mkGhost = (rimAlpha) => {
+      const g = document.createElement('canvas'); g.width = g.height = S;
+      const c = g.getContext('2d');
+      c.drawImage(mask, 0, 0);
+      c.globalCompositeOperation = 'source-in';
+      c.fillStyle = 'rgba(246,239,227,0.09)';
+      c.fillRect(0, 0, S, S);
+      // rim: mask blurred-out minus mask = cheap edge; strokeText needs the
+      // same shaping run, so draw the mask offset in 8 directions instead
+      c.globalCompositeOperation = 'destination-over';
+      const r = document.createElement('canvas'); r.width = r.height = S;
+      const rc = r.getContext('2d');
+      const o = Math.max(1.5 * dpr, 2);
+      for (const [dx, dy] of [[o, 0], [-o, 0], [0, o], [0, -o], [o, o], [-o, -o], [o, -o], [-o, o]]) rc.drawImage(mask, dx, dy);
+      rc.globalCompositeOperation = 'destination-out';
+      rc.drawImage(mask, 0, 0);
+      rc.globalCompositeOperation = 'source-in';
+      rc.fillStyle = `rgba(111,211,182,${rimAlpha})`;
+      rc.fillRect(0, 0, S, S);
+      c.drawImage(r, 0, 0);
+      return g;
+    };
+    const ghostDim = mkGhost(0.30);
+    const ghostBright = mkGhost(0.45);
+    const tint = document.createElement('canvas'); tint.width = tint.height = S;
+    const tctx = tint.getContext('2d');
+
+    // ── paint layer ──
+    const paint = document.createElement('canvas'); paint.width = paint.height = S;
+    const pctx = paint.getContext('2d', { willReadFrequently: true });
+    pctx.lineCap = 'round'; pctx.lineJoin = 'round';
+    pctx.strokeStyle = '#e8a33d'; pctx.fillStyle = '#e8a33d';
+    pctx.lineWidth = brush;
+
+    const state = {
+      strokes: [], cur: null, activeId: null, oob: false, started: false,
+      completed: false, dead: false, revealT: RM ? 0 : performance.now(),
+      pulse: null, fillT: 0, goldT: 0, raf: 0,
+    };
+
+    const toCanvas = (e) => {
+      const r = canvas.getBoundingClientRect();
+      return { x: (e.clientX - r.left) * (S / r.width), y: (e.clientY - r.top) * (S / r.height) };
+    };
+    const inMask = (p) => {
+      const xi = Math.round(p.x), yi = Math.round(p.y);
+      if (xi < 0 || yi < 0 || xi >= S || yi >= S) return false;
+      return maskData[(yi * S + xi) * 4 + 3] > 40;
+    };
+    const drawSeg = (a, b) => {
+      pctx.globalCompositeOperation = 'source-over';
+      pctx.beginPath();
+      if (a) { pctx.moveTo(a.x, a.y); pctx.lineTo(b.x, b.y); pctx.stroke(); }
+      else { pctx.arc(b.x, b.y, brush / 2, 0, 7); pctx.fill(); }
+      pctx.globalCompositeOperation = 'destination-in';
+      pctx.drawImage(mask, 0, 0);
+      pctx.globalCompositeOperation = 'source-over';
+    };
+    const coverage = () => {
+      const d = pctx.getImageData(0, 0, S, S).data;
+      const flags = samples.map((p) => d[(p.y * S + p.x) * 4 + 3] > 40);
+      return { frac: flags.filter(Boolean).length / samples.length, flags };
+    };
+
+    const onDown = (e) => {
+      if (state.activeId !== null || state.completed || state.dead) return;
+      state.activeId = e.pointerId;
+      try { canvas.setPointerCapture(e.pointerId); } catch {}
+      state.started = true;
+      state.pulse = null;
+      const p = toCanvas(e);
+      state.cur = [p];
+      drawSeg(null, p);
+      state.oob = !inMask(p);
+      e.preventDefault();
+    };
+    const onMove = (e) => {
+      if (e.pointerId !== state.activeId || !state.cur) return;
+      // coalesced batch when available; empty for synthetic/untrusted events
+      const coalesced = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+      const events = coalesced.length ? coalesced : [e];
+      for (const ev of events) {
+        const p = toCanvas(ev);
+        drawSeg(state.cur[state.cur.length - 1], p);
+        state.cur.push(p);
+      }
+      state.oob = !inMask(toCanvas(e));
+      e.preventDefault();
+    };
+    const onUp = (e) => {
+      if (e.pointerId !== state.activeId) return;
+      state.activeId = null; state.oob = false;
+      if (state.cur) { state.strokes.push(state.cur); state.cur = null; }
+      if (state.completed) return;
+      const { frac, flags } = coverage();
+      if (frac >= opts.threshold) {
+        state.completed = true;
+        state.fillT = performance.now();
+        opts.onComplete();
+      } else if (frac >= 0.55) {
+        const c = window.AppUtils.largestUnpaintedCluster(samples, flags, 24 * dpr);
+        if (c) state.pulse = { x: c.x, y: c.y, t: performance.now() };
+      }
+    };
+    canvas.addEventListener('pointerdown', onDown);
+    canvas.addEventListener('pointermove', onMove);
+    canvas.addEventListener('pointerup', onUp);
+    canvas.addEventListener('pointercancel', onUp);
+
+    const render = (now) => {
+      if (state.dead) return;
+      ctx.clearRect(0, 0, S, S);
+      // ghost with entry wipe (900ms left→right, once)
+      const wipe = RM ? 1 : Math.min(1, (now - state.revealT) / 900);
+      ctx.save();
+      if (wipe < 1) { ctx.beginPath(); ctx.rect(0, 0, S * wipe, S); ctx.clip(); }
+      ctx.drawImage(state.oob ? ghostBright : ghostDim, 0, 0);
+      ctx.restore();
+      // the child's ink is always visible; completion layers on top of it
+      ctx.drawImage(paint, 0, 0);
+      if (state.completed) {
+        const ft = RM ? 1 : Math.min(1, (now - state.fillT) / 400);
+        const gt = Math.max(0, Math.min(1, RM ? 1 : (now - state.fillT - 400) / 600));
+        ctx.save();
+        if (gt > 0 && gt < 1 && !RM) {
+          const sc = 1 + 0.03 * Math.sin(gt * Math.PI);   // one settle breath
+          ctx.translate(S / 2, S / 2); ctx.scale(sc, sc); ctx.translate(-S / 2, -S / 2);
+        }
+        // saffron completes the letter (self-fill), then gold "sets" it
+        tctx.globalCompositeOperation = 'source-over';
+        tctx.clearRect(0, 0, S, S);
+        tctx.drawImage(mask, 0, 0);
+        tctx.globalCompositeOperation = 'source-in';
+        tctx.fillStyle = '#e8a33d';
+        tctx.fillRect(0, 0, S, S);
+        if (gt > 0) {
+          tctx.globalAlpha = gt; tctx.fillStyle = '#e3c88a'; tctx.fillRect(0, 0, S, S);
+          tctx.globalAlpha = 1;
+        }
+        ctx.globalAlpha = ft;
+        ctx.drawImage(tint, 0, 0);
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      }
+      // start dot pulse (until first touch)
+      if (!state.started && !state.completed) {
+        const a = RM ? 0.9 : 0.55 + 0.35 * Math.sin(now / 255);
+        ctx.beginPath();
+        ctx.arc(dot.x, dot.y, 9 * dpr, 0, 7);
+        ctx.fillStyle = `rgba(232,163,61,${a})`;
+        ctx.fill();
+      }
+      // lift pulse: "here's what's left" (two soft pulses)
+      if (state.pulse) {
+        const pt = (now - state.pulse.t) / 200;
+        if (pt > 4) state.pulse = null;
+        else {
+          const a = RM ? 0.10 : 0.10 * Math.abs(Math.sin(pt * Math.PI / 2));
+          const g = ctx.createRadialGradient(state.pulse.x, state.pulse.y, 0, state.pulse.x, state.pulse.y, 46 * dpr);
+          g.addColorStop(0, `rgba(246,239,227,${a})`);
+          g.addColorStop(1, 'rgba(246,239,227,0)');
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, S, S);
+        }
+      }
+      state.raf = requestAnimationFrame(render);
+    };
+    state.raf = requestAnimationFrame(render);
+
+    return {
+      tofu: false,
+      clear() {
+        pctx.globalCompositeOperation = 'source-over';
+        pctx.clearRect(0, 0, S, S);
+        state.strokes = []; state.cur = null; state.completed = false;
+        state.pulse = null; state.started = false;
+        state.revealT = RM ? 0 : performance.now();
+      },
+      destroy() {
+        state.dead = true;
+        cancelAnimationFrame(state.raf);
+        canvas.removeEventListener('pointerdown', onDown);
+        canvas.removeEventListener('pointermove', onMove);
+        canvas.removeEventListener('pointerup', onUp);
+        canvas.removeEventListener('pointercancel', onUp);
+      },
+    };
   }
 
   function detailHeader(title) {
@@ -8847,6 +9209,23 @@ ${numbered}`;
     $('guj-hub-back').addEventListener('click', () => switchTab('stories'));
     $('guj-section-back').addEventListener('click', () => openGujHub());
     $('guj-detail-back').addEventListener('click', () => { if (_gujKey) openGujSection(_gujKey); else openGujHub(); });
+    $('guj-trace-back').addEventListener('click', () => {
+      if (_traceEng) { _traceEng.destroy(); _traceEng = null; }
+      if (_traceReturn === 'detail') openGujDetail('consonants', _traceIdx);
+      else openGujSection('tracing');
+    });
+    $('guj-trace-hear').addEventListener('click', () => {
+      const it = window.GUJARATI_DATA?.consonants?.items?.[_traceIdx];
+      if (it) gujPlay(it.audio);
+    });
+    $('guj-trace-clear').addEventListener('click', () => {
+      if (!_traceEng) return;
+      _traceEng.clear();
+      $('guj-trace-caption').textContent = '';
+      $('guj-trace-caption').classList.remove('guj-trace-caption--in');
+      $('guj-trace-word').classList.add('hidden');
+      $('guj-trace-footer').classList.add('hidden');
+    });
 
     // Audiobooks back + more details toggle
     $('ab-resync-btn').addEventListener('click', async () => {
@@ -9296,6 +9675,7 @@ ${numbered}`;
     'view-gujarati-hub': 'guj-hub-back',
     'view-gujarati-section': 'guj-section-back',
     'view-gujarati-detail': 'guj-detail-back',
+    'view-gujarati-trace': 'guj-trace-back',
     'view-ai-stories': 'ai-stories-back',
     'view-story-list': 'story-list-back',
     'view-conv-ages': 'conv-ages-back',
@@ -9336,7 +9716,7 @@ ${numbered}`;
       if (e.touches.length !== 1) return;
       const view = document.querySelector('#content .view:not(.hidden)');
       if (!view || !BACK_BTN_BY_VIEW[view.id]) return; // tab roots: no swipe-back
-      if (e.target.closest('#conv-cat-scroll, .ab-continue-scroll, .player-sheet, .modal, input[type="range"], .story-tts-bar')) return;
+      if (e.target.closest('#conv-cat-scroll, .ab-continue-scroll, .player-sheet, .modal, input[type="range"], .story-tts-bar, #guj-trace-stage')) return;
       startX = e.touches[0].clientX; startY = e.touches[0].clientY;
       armed = true;
     }, { passive: true });

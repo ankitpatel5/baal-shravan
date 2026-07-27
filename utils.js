@@ -319,8 +319,68 @@ function buildApiUsageSeries(docs, mode, now) {
   return { labels, buckets, apis, totals };
 }
 
+// ── Gujarati letter tracing (Practice Tracing) ──────────────────────────────
+
+// Conjuncts (contain the virama ્) have dense junctions where the last few
+// percent of coverage is pixel-hunting — they complete at a lower threshold.
+function traceThreshold(glyph) {
+  return glyph && glyph.includes('્') ? 0.80 : 0.85;
+}
+
+// Next untraced consonant index after cur, wrapping; -1 when every letter is done.
+function traceNextUntraced(doneArr, total, cur) {
+  const done = new Set(doneArr || []);
+  for (let step = 1; step <= total; step++) {
+    const i = (cur + step) % total;
+    if (!done.has(i)) return i;
+  }
+  return -1;
+}
+
+// Largest connected cluster of unpainted sample points (grid-cell flood fill)
+// → its centroid, for the "what's left?" pulse when a child lifts mid-trace.
+// samples: [{x,y}], paintedFlags: parallel truthy/falsy array. Returns
+// {x, y, count} or null when nothing is unpainted.
+function largestUnpaintedCluster(samples, paintedFlags, cell = 24) {
+  const cells = new Map();
+  samples.forEach((p, i) => {
+    if (paintedFlags[i]) return;
+    const k = `${Math.floor(p.x / cell)}:${Math.floor(p.y / cell)}`;
+    if (!cells.has(k)) cells.set(k, []);
+    cells.get(k).push(p);
+  });
+  if (!cells.size) return null;
+  const seen = new Set();
+  let best = null;
+  for (const start of cells.keys()) {
+    if (seen.has(start)) continue;
+    seen.add(start);
+    const stack = [start];
+    const members = [];
+    while (stack.length) {
+      const cur = stack.pop();
+      members.push(...cells.get(cur));
+      const [cx, cy] = cur.split(':').map(Number);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nk = `${cx + dx}:${cy + dy}`;
+        if (cells.has(nk) && !seen.has(nk)) { seen.add(nk); stack.push(nk); }
+      }
+    }
+    if (!best || members.length > best.length) best = members;
+  }
+  const n = best.length;
+  return {
+    x: best.reduce((s, p) => s + p.x, 0) / n,
+    y: best.reduce((s, p) => s + p.y, 0) / n,
+    count: n,
+  };
+}
+
 const AppUtils = {
   enforceSingleAudio,
+  traceThreshold,
+  traceNextUntraced,
+  largestUnpaintedCluster,
   parseAlbumFolderName,
   gujLocalAudioPath,
   virtualChapterIdxForPos,
