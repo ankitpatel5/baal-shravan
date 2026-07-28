@@ -7,6 +7,16 @@ import WebKit
 class ViewController: CAPBridgeViewController {
 
     override func capacitorDidLoad() {
+        // Kill the WKWebView's native rubber-band bounce. The app is a
+        // fixed-viewport SPA (body overflow hidden, inner scrollers manage
+        // themselves) and there is NO pull-to-refresh anywhere — the bounce
+        // only ever fought full-screen gestures (letter tracing's downward
+        // strokes dragged the whole page; owner report 2026-07-27). CSS
+        // overscroll-behavior can't reach this: the bounce is native.
+        webView?.scrollView.bounces = false
+        webView?.scrollView.alwaysBounceVertical = false
+        webView?.scrollView.alwaysBounceHorizontal = false
+
         // Register our native Google Sign-In plugin with the Capacitor bridge.
         bridge?.registerPluginInstance(GoogleSignInPlugin())
         bridge?.registerPluginInstance(SignInWithApple())

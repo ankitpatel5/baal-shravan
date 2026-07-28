@@ -418,6 +418,7 @@ input { font-family: inherit; color: inherit; }
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;   /* never chain a drag into the (now-disabled) native bounce */
   padding-bottom: calc(var(--tabbar-h) + var(--safe-bot) + 16px);
 }
 /* Extra bottom room when the mini-player is visible (music tab only) */
