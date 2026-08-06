@@ -9614,6 +9614,7 @@ ${numbered}`;
     setupSheetSwipe();
     setupPullToRefresh();
     setupSwipeBack();
+    setupNoElasticOverscroll();
 
     // Track menu
     document.querySelectorAll('#track-menu .modal-item').forEach((btn) => {
@@ -9708,6 +9709,46 @@ ${numbered}`;
   // Strict horizontal intent so vertical scrolling never misfires; touches
   // starting on horizontal scrollers / drag surfaces are ignored (same
   // exclusion pattern as setupPullToRefresh).
+  // ── iOS: kill elastic overscroll for good ─────────────────────────────
+  // Every page scrolls inside a div, and iOS WebKit gives inner scrollers
+  // their own rubber-band that reads exactly like pull-to-refresh. Neither
+  // native scrollView.bounces=false (outer view only) nor CSS
+  // overscroll-behavior (WebKit implements just the chaining half) can stop
+  // it — the only thing WebKit honors is preventDefault on the edge drag
+  // itself. Owner ruling 2026-07-30: no bounce anywhere, ever.
+  function setupNoElasticOverscroll() {
+    const isIOS = !!(window.Capacitor?.isNativePlatform?.() && window.Capacitor.getPlatform?.() === 'ios')
+      || (/iPad|iPhone|iPod/.test(navigator.userAgent) && 'ontouchend' in document);
+    if (!isIOS) return; // Android glows instead of bouncing; don't tax its main thread
+    let startX = 0, startY = 0, scroller = null;
+    const findScroller = (el) => {
+      while (el && el !== document.documentElement) {
+        if (el.scrollHeight > el.clientHeight + 1) {
+          const oy = getComputedStyle(el).overflowY;
+          if (oy === 'auto' || oy === 'scroll') return el;
+        }
+        el = el.parentElement;
+      }
+      return null;
+    };
+    document.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) { scroller = null; return; }
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      scroller = findScroller(e.target);
+    }, { passive: true });
+    document.addEventListener('touchmove', (e) => {
+      if (e.touches.length !== 1 || !e.cancelable) return;
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      if (Math.abs(dx) > Math.abs(dy)) return;      // horizontal gesture — carousels, sliders
+      if (!scroller) { e.preventDefault(); return; } // nothing scrollable under the finger
+      const atTop = scroller.scrollTop <= 0;
+      const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1;
+      if ((atTop && dy > 0) || (atBottom && dy < 0)) e.preventDefault();
+    }, { passive: false });
+  }
+
   function setupSwipeBack() {
     const content = $('content');
     let startX = 0, startY = 0, armed = false;
