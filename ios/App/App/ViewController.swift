@@ -6,6 +6,19 @@ import WebKit
 /// prevents stale Firebase redirect state from hijacking the WebView.
 class ViewController: CAPBridgeViewController {
 
+    // Re-assert on every appearance: Capacitor/Keyboard plumbing can quietly
+    // re-enable scrollView flags after capacitorDidLoad.
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        killBounce()
+    }
+
+    private func killBounce() {
+        webView?.scrollView.bounces = false
+        webView?.scrollView.alwaysBounceVertical = false
+        webView?.scrollView.alwaysBounceHorizontal = false
+    }
+
     override func capacitorDidLoad() {
         // Kill the WKWebView's native rubber-band bounce. The app is a
         // fixed-viewport SPA (body overflow hidden, inner scrollers manage
