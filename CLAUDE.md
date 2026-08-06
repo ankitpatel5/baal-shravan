@@ -360,6 +360,22 @@ When the user says anything like "build for iOS submission", "archive for App St
   Tests: tests/guj-trace.test.js (helpers + wiring locks). Verified on
   emulator end-to-end 2026-07-27 (ka trace → completion → ring, conjunct
   opens). Phase-2 socket reserved: hand-authored stroke-order paths.
+- **Quiz** (Learn Gujarati · 2026-08-05, owner-specced): consonant multiple
+  choice. `GUJ_META.quiz` (4th hub card, help icon, `dataKey: 'consonants'`)
+  → openGujSection kind 'quiz' → `gujQuizStart/gujQuizRender/gujQuizSummary`
+  in-section (no new view; back = section back). Shuffled full kakko round
+  (AppUtils.shuffleIndices), options via AppUtils.quizOptions (correct + 3
+  translit-DEDUPED distractors — kakko repeats sa/sha). ONE attempt per
+  question (owner revision): right = TRACE_PRAISE + `markGujDone('quiz')`
+  (earned ring, "N / 34 matched"); wrong = reveal correct option + "Not
+  quite — it's X" and move on; letter audio plays either way (gujPlay).
+  Summary: right-vs-missed score, missed letters cross-link
+  `openGujTrace(i,'quiz')` (trace back handler returns to quiz section),
+  Play again reshuffles. Lifetime misses: `drift.gujQuizMisses` (local
+  only, NOT in gujProgress — union-merge is arrays-only). Tests:
+  tests/guj-quiz.test.js. Emulator-verified full 34-question round
+  2026-08-05 (test progress cleaned from owner account after; device
+  union-merge restores his own).
 - **Nitya reorder** (Edit mode, 2026-07-27): `nityaWireDrag` — right-edge ≡
   handle per row (only visible in `.nitya-editing`), Pointer Events +
   setPointerCapture, `touch-action:none` scoped to the handle so the rest
