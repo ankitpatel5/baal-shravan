@@ -9612,7 +9612,6 @@ ${numbered}`;
     });
 
     setupSheetSwipe();
-    setupPullToRefresh();
     setupSwipeBack();
     setupNoElasticOverscroll();
 
@@ -9708,7 +9707,7 @@ ${numbered}`;
   // Swipe-right anywhere on the content area → back (interior views only).
   // Strict horizontal intent so vertical scrolling never misfires; touches
   // starting on horizontal scrollers / drag surfaces are ignored (same
-  // exclusion pattern as setupPullToRefresh).
+  // exclusion pattern as the sheets/modals guards).
   // ── iOS: kill elastic overscroll for good ─────────────────────────────
   // Every page scrolls inside a div, and iOS WebKit gives inner scrollers
   // their own rubber-band that reads exactly like pull-to-refresh. Neither
@@ -9813,86 +9812,6 @@ ${numbered}`;
     sheet.addEventListener('touchmove', onMove, { passive: true });
     sheet.addEventListener('touchend', onEnd);
     sheet.addEventListener('touchcancel', onEnd);
-  }
-
-  // ============== PULL-TO-REFRESH ==============
-  function setupPullToRefresh() {
-    const content   = $('content');
-    const indicator = $('ptr-indicator');
-    if (!content || !indicator) return;
-
-    const THRESHOLD = 72;   // px of raw drag needed to trigger
-    const DAMP      = 0.42; // how much resistance to apply (< 1 = slower than finger)
-    const MAX_PULL  = 100;  // cap how far indicator travels
-    const HIDE_Y    = -80;  // translateY when fully hidden (slides under topbar)
-    const HOLD_Y    = 12;   // translateY when spinning (held in view)
-
-    let startY    = 0;
-    let pulling   = false;
-    let triggered = false;
-
-    function applyPull(rawDy) {
-      const dy = Math.min(rawDy * DAMP, MAX_PULL);
-      // No JS transition while dragging — we update every frame
-      indicator.style.transition = 'none';
-      indicator.style.transform  = `translateX(-50%) translateY(${HIDE_Y + dy}px)`;
-      indicator.classList.toggle('ptr-ready', dy >= THRESHOLD * DAMP);
-    }
-
-    function snapBack() {
-      indicator.style.transition = 'transform .25s ease';
-      indicator.style.transform  = `translateX(-50%) translateY(${HIDE_Y}px)`;
-      indicator.classList.remove('ptr-ready', 'ptr-spinning');
-      pulling   = false;
-      triggered = false;
-    }
-
-    function triggerRefresh() {
-      triggered = true;
-      indicator.classList.remove('ptr-ready');
-      indicator.classList.add('ptr-spinning');
-      indicator.style.transition = 'transform .2s ease';
-      indicator.style.transform  = `translateX(-50%) translateY(${HOLD_Y}px)`;
-      // Force-reload bypasses all caches (equivalent to hard refresh)
-      setTimeout(() => location.reload(true), 520);
-    }
-
-    content.addEventListener('touchstart', (e) => {
-      if (triggered) return;
-      if (content.scrollTop > 0) return;
-      // Ignore touches that start inside floating sheets / player / TTS bar
-      if (e.target.closest('.player-sheet, .prompt-sheet, .settings-sheet, .story-tts-bar, .modal-overlay')) return;
-      startY  = e.touches[0].clientY;
-      pulling = false; // wait for first move to confirm downward direction
-    }, { passive: true });
-
-    content.addEventListener('touchmove', (e) => {
-      if (triggered) return;
-      if (content.scrollTop > 0) { pulling = false; return; }
-      const dy = e.touches[0].clientY - startY;
-      if (dy <= 0) { pulling = false; return; }
-      // Confirmed downward drag — activate PTR
-      if (!pulling) pulling = true;
-      e.preventDefault(); // block native scroll/bounce while PTR is active
-      applyPull(dy);
-    }, { passive: false });
-
-    content.addEventListener('touchend', () => {
-      if (!pulling || triggered) return;
-      // Read how far the indicator has moved
-      const match  = (indicator.style.transform || '').match(/translateY\((-?[\d.]+)px\)/);
-      const curY   = match ? parseFloat(match[1]) : HIDE_Y;
-      const pullDy = curY - HIDE_Y; // how many px it's been pushed down
-      if (pullDy >= THRESHOLD * DAMP) {
-        triggerRefresh();
-      } else {
-        snapBack();
-      }
-    });
-
-    content.addEventListener('touchcancel', () => {
-      if (pulling && !triggered) snapBack();
-    });
   }
 
   // ============== ONBOARDING ==============
