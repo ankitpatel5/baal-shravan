@@ -335,7 +335,8 @@ When the user says anything like "build for iOS submission", "archive for App St
   NOT yet done: msClaim('sd') lock-screen identity, ghanti tick/haptics.
 - **Practice Tracing** (Learn Gujarati · committee consult 2026-07-27, from a
   real parent's feature request): kids finger-paint the 34 consonants.
-  `GUJ_META.tracing` (3rd hub card, hollow glyph `.guj-hub-glyph--trace`,
+  `GUJ_META.tracing` (Practice-section card, label 'Tracing' since the
+  2026-08-05 hub split, hollow glyph `.guj-hub-glyph--trace`,
   `dataKey: 'consonants'` — a verb on existing data, no new content system) →
   `openGujSection` kind 'trace' (ghost-tile grid, kakko order, NEXT whisper
   on first untraced, check chips) + teal "Trace" pill in each consonant's
@@ -361,7 +362,11 @@ When the user says anything like "build for iOS submission", "archive for App St
   emulator end-to-end 2026-07-27 (ka trace → completion → ring, conjunct
   opens). Phase-2 socket reserved: hand-authored stroke-order paths.
 - **Quiz** (Learn Gujarati · 2026-08-05, owner-specced): consonant multiple
-  choice. `GUJ_META.quiz` (4th hub card, help icon, `dataKey: 'consonants'`)
+  choice. `GUJ_META.quiz` (Practice-section card, help icon, `dataKey: 'consonants'`;
+  hub split 2026-08-05: GUJ_HUB_SECTIONS renders Learn/Practice header rows
+  inside #guj-hub-grid — grid-column 1/-1, Library section anatomy; practice
+  cards carry `empty:` zero-state lines; quiz resume: results-page Trace
+  links set _quizResume so back returns to results, not a fresh round)
   → openGujSection kind 'quiz' → `gujQuizStart/gujQuizRender/gujQuizSummary`
   in-section (no new view; back = section back). Shuffled full kakko round
   (AppUtils.shuffleIndices), options via AppUtils.quizOptions (correct + 3
