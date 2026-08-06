@@ -376,11 +376,49 @@ function largestUnpaintedCluster(samples, paintedFlags, cell = 24) {
   };
 }
 
+// ── Gujarati letter quiz (multiple choice) ──────────────────────────────────
+
+// Fisher–Yates permutation of 0..n-1; rand is injectable for deterministic tests.
+function shuffleIndices(n, rand = Math.random) {
+  const a = Array.from({ length: n }, (_, i) => i);
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// 4 option indices for a question: the correct letter + 3 distractors with
+// unique, non-empty transliterations (kakko has repeats like sa/sha), shuffled.
+function quizOptions(items, correctIdx, rand = Math.random, count = 4) {
+  const seen = new Set([(items[correctIdx].translit || '').toLowerCase()]);
+  const pool = [];
+  items.forEach((it, i) => {
+    if (i === correctIdx) return;
+    const t = (it.translit || '').toLowerCase();
+    if (!t || seen.has(t)) return;
+    seen.add(t);
+    pool.push(i);
+  });
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const opts = [correctIdx, ...pool.slice(0, count - 1)];
+  for (let i = opts.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [opts[i], opts[j]] = [opts[j], opts[i]];
+  }
+  return opts;
+}
+
 const AppUtils = {
   enforceSingleAudio,
   traceThreshold,
   traceNextUntraced,
   largestUnpaintedCluster,
+  shuffleIndices,
+  quizOptions,
   parseAlbumFolderName,
   gujLocalAudioPath,
   virtualChapterIdxForPos,

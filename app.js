@@ -4259,9 +4259,10 @@
   const GUJ_META = {
     vowels:     { label: 'Vowels',      kind: 'grid', glyph: 'અ',  unit: 'letters' },
     consonants: { label: 'Consonants',  kind: 'grid', glyph: 'ક',  unit: 'letters' },
-    // A verb on the consonants data, not a new content section — dataKey
-    // points the counts/grid at consonants.items (committee 2026-07-27).
+    // Verbs on the consonants data, not new content sections — dataKey
+    // points the counts at consonants.items (committee 2026-07-27).
     tracing:    { label: 'Practice Tracing', kind: 'trace', glyph: 'ક', unit: 'letters', dataKey: 'consonants' },
+    quiz:       { label: 'Quiz',        kind: 'quiz', icon: 'help', unit: 'letters', dataKey: 'consonants' },
     numbers:    { label: 'Numbers',     kind: 'grid', glyph: '૧',  unit: 'numbers' },
     vocabulary: { label: 'Vocabulary',  kind: 'grid', icon: 'books', unit: 'topics' },
     verbs:      { label: 'Verbs',       kind: 'verbs', icon: 'run',  unit: 'verbs' },
@@ -4271,6 +4272,7 @@
     books: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
     run:   '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4" r="1"/><path d="M4 17l5-1 2-4 4 3 3 1M11 12l-1 5 3 4M14 7l-2 3"/></svg>',
     chat:  '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>',
+    help:  '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
   };
   const SPEAKER = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>';
   const PLAY_TRI = '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>';
@@ -4408,7 +4410,7 @@
         : (m.kind === 'sentences') ? `${d.sets.reduce((n, s) => n + s.rows.length, 0)} sentences`
         : `${total} ${m.unit}`;
       const head = m.glyph ? `<span class="guj-hub-glyph${m.kind === 'trace' ? ' guj-hub-glyph--trace' : ''}">${m.glyph}</span>` : `<span class="guj-hub-ic">${GUJ_ICONS[m.icon]}</span>`;
-      const countLine = done > 0 ? `${done} / ${total} ${key === 'tracing' ? 'traced' : 'done'}` : unit;
+      const countLine = done > 0 ? `${done} / ${total} ${key === 'tracing' ? 'traced' : key === 'quiz' ? 'matched' : 'done'}` : unit;
       const card = document.createElement('button');
       card.className = 'guj-hub-card';
       card.innerHTML = `<span class="guj-hub-top">${head}${gujRing(total ? done / total : 0)}</span><span class="guj-hub-name">${m.label}</span><span class="guj-hub-count">${countLine}</span>`;
@@ -4468,6 +4470,9 @@
         grid.appendChild(tile);
       });
       body.appendChild(grid);
+    } else if (m.kind === 'quiz') {
+      sub.textContent = 'Match the letter to its sound';
+      gujQuizStart(body);
     } else if (m.kind === 'verbs') {
       sub.textContent = 'Choose a set';
       body.appendChild(buildPackList(d.packs.map((p, i) => ({ label: p.pack.replace('part-', 'Set '), count: `${p.verbs.length} verbs`, idx: i })), (i) => openGujDetail('verbs', i)));
@@ -4862,6 +4867,126 @@
         canvas.removeEventListener('pointercancel', onUp);
       },
     };
+  }
+
+  // ══ Quiz — which letter is this? (multiple choice on the consonants) ═══
+  // A glyph, four transliterations, ONE attempt per question: a right pick
+  // earns praise, a wrong pick reveals the answer — either way the letter
+  // speaks its own name and the child moves on. Right-vs-wrong shows at the
+  // end, with the missed letters cross-linked into Practice Tracing.
+  let _quizOrder = [];
+  let _quizPos = 0;
+  let _quizAnswered = false;
+  let _quizRight = 0;
+  let _quizWrongIdx = [];      // letters missed this round, in order
+  let _quizMissTally = null;   // lifetime per-letter miss counts (local diagnostics)
+
+  function quizMissTally() {
+    if (_quizMissTally === null) {
+      try { _quizMissTally = JSON.parse(localStorage.getItem('drift.gujQuizMisses') || '{}'); }
+      catch { _quizMissTally = {}; }
+    }
+    return _quizMissTally;
+  }
+
+  function gujQuizStart(body) {
+    const items = window.GUJARATI_DATA.consonants.items;
+    _quizOrder = window.AppUtils.shuffleIndices(items.length);
+    _quizPos = 0;
+    _quizRight = 0;
+    _quizWrongIdx = [];
+    const host = document.createElement('div');
+    host.id = 'guj-quiz';
+    body.appendChild(host);
+    gujQuizRender();
+  }
+
+  function gujQuizRender() {
+    const host = $('guj-quiz');
+    if (!host) return;
+    const items = window.GUJARATI_DATA.consonants.items;
+    if (_quizPos >= _quizOrder.length) { gujQuizSummary(host, items); return; }
+    const idx = _quizOrder[_quizPos];
+    const it = items[idx];
+    _quizAnswered = false;
+    const opts = window.AppUtils.quizOptions(items, idx);
+    host.innerHTML = `
+      <div class="guj-quiz-count">${_quizPos + 1} / ${_quizOrder.length}</div>
+      <div class="guj-quiz-card"><span class="guj-quiz-glyph">${escapeHtml(it.gujarati)}</span></div>
+      <div class="guj-quiz-caption" id="guj-quiz-caption">Which letter is this?</div>
+      <div class="guj-quiz-opts">
+        ${opts.map((oi) => `<button class="guj-quiz-opt" data-i="${oi}">${escapeHtml(items[oi].translit || '')}</button>`).join('')}
+      </div>
+      <div class="guj-quiz-foot">
+        <button class="guj-quiz-next hidden" id="guj-quiz-next">Next</button>
+      </div>`;
+    const cap = host.querySelector('#guj-quiz-caption');
+    host.querySelectorAll('.guj-quiz-opt').forEach((b) => b.addEventListener('click', () => {
+      if (_quizAnswered) return;   // one attempt — the first tap decides
+      _quizAnswered = true;
+      const oi = +b.dataset.i;
+      const right = oi === idx;
+      host.querySelectorAll('.guj-quiz-opt').forEach((x) => {
+        const xi = +x.dataset.i;
+        if (xi === idx) x.classList.add('guj-quiz-opt--right');       // always reveal the answer
+        else if (x === b) x.classList.add('guj-quiz-opt--wrong');
+        else x.classList.add('guj-quiz-opt--dim');
+      });
+      if (right) {
+        _quizRight += 1;
+        cap.innerHTML = `${escapeHtml(TRACE_PRAISE[idx % TRACE_PRAISE.length])} <span class="guj-quiz-cap-sub">It's ${escapeHtml(it.translit || it.gujarati)}</span>`;
+        cap.classList.add('guj-quiz-caption--good');
+        markGujDone('quiz', idx);
+      } else {
+        _quizWrongIdx.push(idx);
+        const tally = quizMissTally();
+        tally[idx] = (tally[idx] || 0) + 1;
+        try { localStorage.setItem('drift.gujQuizMisses', JSON.stringify(tally)); } catch {}
+        cap.innerHTML = `Not quite — it's <b>${escapeHtml(it.translit || it.gujarati)}</b>. You'll get it next time!`;
+        cap.classList.remove('guj-quiz-caption--good');
+      }
+      gujPlay(it.audio);   // the letter says its name either way — that's the teaching
+      logActivity('learn', `Quiz: ${right ? 'matched' : 'missed'} ${it.gujarati} (${it.translit || ''})`);
+      const next = $('guj-quiz-next');
+      next.textContent = _quizPos + 1 >= _quizOrder.length ? 'See results' : 'Next';
+      next.classList.remove('hidden');
+    }));
+    $('guj-quiz-next').addEventListener('click', () => { _quizPos += 1; gujQuizRender(); });
+    $('content').scrollTo({ top: 0, behavior: 'instant' });
+  }
+
+  function gujQuizSummary(host, items) {
+    const wrong = _quizWrongIdx;
+    const total = _quizOrder.length;
+    host.innerHTML = `
+      <div class="guj-quiz-done-head">${wrong.length ? 'સરસ! Saras!' : 'શાબાશ! Shabash!'}</div>
+      <div class="guj-quiz-score">
+        <span class="guj-quiz-score-right">${_quizRight} right</span>
+        <span class="guj-quiz-score-dot">·</span>
+        <span class="guj-quiz-score-wrong">${wrong.length} missed</span>
+      </div>
+      <p class="guj-quiz-done-sub">${wrong.length ? `${_quizRight} of ${total} on the first try.` : `All ${total} letters on the first try — a perfect round!`}</p>
+      ${wrong.length ? `
+        <div class="guj-quiz-tricky">
+          <div class="guj-quiz-tricky-lab">The ones that got away — trace them to make them stick</div>
+          ${wrong.slice(0, 8).map((i) => `
+            <button class="guj-quiz-tricky-row" data-i="${i}">
+              <span class="guj-quiz-tricky-glyph">${escapeHtml(items[i].gujarati)}</span>
+              <span class="guj-quiz-tricky-name">${escapeHtml(items[i].translit || '')}</span>
+              <span class="guj-quiz-tricky-go">Trace</span>
+            </button>`).join('')}
+        </div>` : ''}
+      <button class="guj-quiz-next" id="guj-quiz-again">Play again</button>`;
+    host.querySelectorAll('.guj-quiz-tricky-row').forEach((r) => r.addEventListener('click', () => {
+      openGujTrace(+r.dataset.i, 'quiz');
+    }));
+    $('guj-quiz-again').addEventListener('click', () => {
+      _quizOrder = window.AppUtils.shuffleIndices(items.length);
+      _quizPos = 0;
+      _quizRight = 0;
+      _quizWrongIdx = [];
+      gujQuizRender();
+    });
   }
 
   function detailHeader(title) {
@@ -9212,6 +9337,7 @@ ${numbered}`;
     $('guj-trace-back').addEventListener('click', () => {
       if (_traceEng) { _traceEng.destroy(); _traceEng = null; }
       if (_traceReturn === 'detail') openGujDetail('consonants', _traceIdx);
+      else if (_traceReturn === 'quiz') openGujSection('quiz');
       else openGujSection('tracing');
     });
     $('guj-trace-hear').addEventListener('click', () => {
