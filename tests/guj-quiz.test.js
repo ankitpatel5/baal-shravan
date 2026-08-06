@@ -79,4 +79,9 @@ describe('Quiz wiring', () => {
     expect(fn).toContain('guj-quiz-score-right');
     expect(fn).toContain('guj-quiz-score-wrong');
   });
+  it('returning from a results-page trace resumes the round instead of restarting', () => {
+    expect(APP_SRC).toMatch(/_quizResume = true; openGujSection\('quiz'\)/);
+    const start = APP_SRC.slice(APP_SRC.indexOf('function gujQuizStart'), APP_SRC.indexOf('function gujQuizRender'));
+    expect(start).toContain('if (!resume || !_quizOrder.length)');
+  });
 });

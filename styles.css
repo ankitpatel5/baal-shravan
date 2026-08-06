@@ -715,6 +715,11 @@ input { font-family: inherit; color: inherit; }
 .guj-ring { flex-shrink: 0; margin: 3px 4px 0 8px; }
 .guj-hub-name { font-size: 14px; font-weight: 500; color: var(--fg-0); margin-top: auto; padding-top: 12px; }
 .guj-hub-count { font-size: 11px; color: var(--fg-3); margin-top: 2px; }
+/* Learn / Practice hub sections (owner 2026-08-05): Learn-tab label grammar
+   as full-width rows INSIDE the card grid — no per-section color; order
+   alone signals priority, cards in both sections stay identical. */
+.guj-hub-header { grid-column: 1 / -1; }
+.guj-hub-header ~ .guj-hub-header { margin-top: 14px; }
 
 /* Letter / number tiles — glyph hero, with a centered listen button below
    (stacked so the speaker never collides with wide glyphs like આ / ઔ). */

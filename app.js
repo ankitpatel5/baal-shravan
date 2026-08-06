@@ -4257,17 +4257,24 @@
 
   // ============== LEARN GUJARATI ==============
   const GUJ_META = {
-    vowels:     { label: 'Vowels',      kind: 'grid', glyph: 'અ',  unit: 'letters' },
-    consonants: { label: 'Consonants',  kind: 'grid', glyph: 'ક',  unit: 'letters' },
+    vowels:     { label: 'Vowels',      kind: 'grid', glyph: 'અ',  unit: 'letters', group: 'learn' },
+    consonants: { label: 'Consonants',  kind: 'grid', glyph: 'ક',  unit: 'letters', group: 'learn' },
     // Verbs on the consonants data, not new content sections — dataKey
     // points the counts at consonants.items (committee 2026-07-27).
-    tracing:    { label: 'Practice Tracing', kind: 'trace', glyph: 'ક', unit: 'letters', dataKey: 'consonants' },
-    quiz:       { label: 'Quiz',        kind: 'quiz', icon: 'help', unit: 'letters', dataKey: 'consonants' },
-    numbers:    { label: 'Numbers',     kind: 'grid', glyph: '૧',  unit: 'numbers' },
-    vocabulary: { label: 'Vocabulary',  kind: 'grid', icon: 'books', unit: 'topics' },
-    verbs:      { label: 'Verbs',       kind: 'verbs', icon: 'run',  unit: 'verbs' },
-    sentences:  { label: 'Sentences',   kind: 'sentences', icon: 'chat', unit: 'sentences' },
+    tracing:    { label: 'Tracing', kind: 'trace', glyph: 'ક', unit: 'letters', dataKey: 'consonants', group: 'practice', empty: 'Trace your first letter' },
+    quiz:       { label: 'Quiz',        kind: 'quiz', icon: 'help', unit: 'letters', dataKey: 'consonants', group: 'practice', empty: 'Match your first letter' },
+    numbers:    { label: 'Numbers',     kind: 'grid', glyph: '૧',  unit: 'numbers', group: 'learn' },
+    vocabulary: { label: 'Vocabulary',  kind: 'grid', icon: 'books', unit: 'topics', group: 'learn' },
+    verbs:      { label: 'Verbs',       kind: 'verbs', icon: 'run',  unit: 'verbs', group: 'learn' },
+    sentences:  { label: 'Sentences',   kind: 'sentences', icon: 'chat', unit: 'sentences', group: 'learn' },
   };
+  // Hub sections (owner 2026-08-05): Learn (content, rings mark on open) then
+  // Practice (earned rings — filled by finishing). Same header anatomy as the
+  // Library's section rows; order = kakko pedagogy, absorb before produce.
+  const GUJ_HUB_SECTIONS = [
+    { group: 'learn',    label: 'Learn',    caption: 'Letters, numbers, words &amp; sentences' },
+    { group: 'practice', label: 'Practice', caption: "Trace &amp; quiz what you've learned" },
+  ];
   const GUJ_ICONS = {
     books: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
     run:   '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4" r="1"/><path d="M4 17l5-1 2-4 4 3 3 1M11 12l-1 5 3 4M14 7l-2 3"/></svg>',
@@ -4401,21 +4408,29 @@
     logActivity('learn', 'Learn Gujarati');
     ensureGujProgress();
     grid.innerHTML = '';
-    Object.keys(GUJ_META).forEach((key) => {
-      const m = GUJ_META[key];
-      const d = data[key];
-      const total = gujTotal(key);
-      const done  = gujDone(key);
-      const unit = (m.kind === 'verbs') ? `${d.packs.reduce((n, p) => n + p.verbs.length, 0)} verbs`
-        : (m.kind === 'sentences') ? `${d.sets.reduce((n, s) => n + s.rows.length, 0)} sentences`
-        : `${total} ${m.unit}`;
-      const head = m.glyph ? `<span class="guj-hub-glyph${m.kind === 'trace' ? ' guj-hub-glyph--trace' : ''}">${m.glyph}</span>` : `<span class="guj-hub-ic">${GUJ_ICONS[m.icon]}</span>`;
-      const countLine = done > 0 ? `${done} / ${total} ${key === 'tracing' ? 'traced' : key === 'quiz' ? 'matched' : 'done'}` : unit;
-      const card = document.createElement('button');
-      card.className = 'guj-hub-card';
-      card.innerHTML = `<span class="guj-hub-top">${head}${gujRing(total ? done / total : 0)}</span><span class="guj-hub-name">${m.label}</span><span class="guj-hub-count">${countLine}</span>`;
-      card.addEventListener('click', () => openGujSection(key));
-      grid.appendChild(card);
+    GUJ_HUB_SECTIONS.forEach((s) => {
+      const head = document.createElement('div');
+      head.className = 'guj-hub-header';
+      head.setAttribute('role', 'heading');
+      head.setAttribute('aria-level', '2');
+      head.innerHTML = `<p class="learn-section-label">${s.label}</p><p class="library-section-caption">${s.caption}</p>`;
+      grid.appendChild(head);
+      Object.keys(GUJ_META).filter((k) => GUJ_META[k].group === s.group).forEach((key) => {
+        const m = GUJ_META[key];
+        const d = data[key];
+        const total = gujTotal(key);
+        const done  = gujDone(key);
+        const unit = (m.kind === 'verbs') ? `${d.packs.reduce((n, p) => n + p.verbs.length, 0)} verbs`
+          : (m.kind === 'sentences') ? `${d.sets.reduce((n, s2) => n + s2.rows.length, 0)} sentences`
+          : `${total} ${m.unit}`;
+        const head2 = m.glyph ? `<span class="guj-hub-glyph${m.kind === 'trace' ? ' guj-hub-glyph--trace' : ''}">${m.glyph}</span>` : `<span class="guj-hub-ic">${GUJ_ICONS[m.icon]}</span>`;
+        const countLine = done > 0 ? `${done} / ${total} ${key === 'tracing' ? 'traced' : key === 'quiz' ? 'matched' : 'done'}` : (m.empty || unit);
+        const card = document.createElement('button');
+        card.className = 'guj-hub-card';
+        card.innerHTML = `<span class="guj-hub-top">${head2}${gujRing(total ? done / total : 0)}</span><span class="guj-hub-name">${m.label}</span><span class="guj-hub-count">${countLine}</span>`;
+        card.addEventListener('click', () => openGujSection(key));
+        grid.appendChild(card);
+      });
     });
     switchView('view-gujarati-hub');
     $('content').scrollTo({ top: 0, behavior: 'instant' });
@@ -4472,7 +4487,8 @@
       body.appendChild(grid);
     } else if (m.kind === 'quiz') {
       sub.textContent = 'Match the letter to its sound';
-      gujQuizStart(body);
+      gujQuizStart(body, _quizResume);
+      _quizResume = false;
     } else if (m.kind === 'verbs') {
       sub.textContent = 'Choose a set';
       body.appendChild(buildPackList(d.packs.map((p, i) => ({ label: p.pack.replace('part-', 'Set '), count: `${p.verbs.length} verbs`, idx: i })), (i) => openGujDetail('verbs', i)));
@@ -4880,6 +4896,7 @@
   let _quizRight = 0;
   let _quizWrongIdx = [];      // letters missed this round, in order
   let _quizMissTally = null;   // lifetime per-letter miss counts (local diagnostics)
+  let _quizResume = false;     // set when returning from a summary-launched trace
 
   function quizMissTally() {
     if (_quizMissTally === null) {
@@ -4889,12 +4906,16 @@
     return _quizMissTally;
   }
 
-  function gujQuizStart(body) {
+  function gujQuizStart(body, resume) {
     const items = window.GUJARATI_DATA.consonants.items;
-    _quizOrder = window.AppUtils.shuffleIndices(items.length);
-    _quizPos = 0;
-    _quizRight = 0;
-    _quizWrongIdx = [];
+    // resume = coming back from a results-page trace: keep the round's state
+    // (order, position, score) so the child lands on their results, not Q1
+    if (!resume || !_quizOrder.length) {
+      _quizOrder = window.AppUtils.shuffleIndices(items.length);
+      _quizPos = 0;
+      _quizRight = 0;
+      _quizWrongIdx = [];
+    }
     const host = document.createElement('div');
     host.id = 'guj-quiz';
     body.appendChild(host);
@@ -9337,7 +9358,7 @@ ${numbered}`;
     $('guj-trace-back').addEventListener('click', () => {
       if (_traceEng) { _traceEng.destroy(); _traceEng = null; }
       if (_traceReturn === 'detail') openGujDetail('consonants', _traceIdx);
-      else if (_traceReturn === 'quiz') openGujSection('quiz');
+      else if (_traceReturn === 'quiz') { _quizResume = true; openGujSection('quiz'); }
       else openGujSection('tracing');
     });
     $('guj-trace-hear').addEventListener('click', () => {
