@@ -125,6 +125,22 @@ Edit `firestore.rules`, then deploy with
   shows the iOS-derived 1.5(1) from app-build.js, which is display-only).
 - **Screenshots via adb**: `adb -s emulator-5554 exec-out screencap -p > out.png`.
 
+## Gesture debugging — search OUR code first (pull-to-refresh post-mortem, 2026-08-05)
+
+The app once had a custom JS pull-to-refresh (setupPullToRefresh +
+#ptr-indicator): drag down at scroll-top on ANY page → spinner →
+`location.reload(true)`. Owner asked to remove it; THREE native-layer fixes
+(scrollView.bounces=false, viewWillAppear re-assert, JS edge-drag canceller)
+were shipped before finding it, because the first grep for "ptr|pull|refresh"
+piped through `head -15` and the real hits scrolled past the cutoff. Rules:
+(1) when hunting a behavior, grep app.js + index.html + styles.css + sw.js
+with NO head-truncation before blaming the platform — "native-feeling"
+behaviors here are often our own JS; (2) removed for good on 2026-08-05
+(commit 2aa5e4a5) — do NOT reintroduce any pull gesture; refresh lives in
+Settings and the audiobook resync button. The elastic-overscroll canceller
+(setupNoElasticOverscroll) and native bounces=false stay — they kill the
+WebKit rubber-band that reads like PTR.
+
 ## iOS native builds — ALWAYS verify the bundle (don't trust incremental builds)
 
 `npm run build:ios` correctly syncs `www/` → `ios/App/App/public/`, BUT a subsequent
