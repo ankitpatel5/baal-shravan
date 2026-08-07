@@ -259,6 +259,16 @@ When the user says anything like "build for iOS submission", "archive for App St
   (tests/api-usage.test.js). Rules: apiUsage create/update any-authed,
   read admin. NOT counted: guest traffic (no auth), Drive thumbnail <img>
   loads, native FCM sends.
+- 2026-08-06: **v1.13 CUT — Practice suite + PTR removal**. iOS 1.13 (1)
+  archived (bundle verified: quiz, GUJ_HUB_SECTIONS, trace engine,
+  ZERO ptr-indicator refs, overscroll canceller, stamped 1.13 (1)) +
+  uploaded to ASC ("Uploaded App"). Android 1.13 (9) signed AAB at
+  android/app/build/outputs/bundle/release/app-release.aab. Contents:
+  Quiz (one-attempt MC + results + resume fix), Practice Tracing,
+  Learn/Practice hub split, pull-to-refresh feature REMOVED (post-
+  mortem above), native bounce-off + elastic-overscroll canceller.
+  ASC web steps owed (owner): create 1.13, attach build, submit.
+  After LIVE: bump app-version-defaults.json ios.latest → 1.13.
 - 2026-07-27: **v1.12 CUT — SD audio player + Nitya reorder**. iOS 1.12 (1)
   archived (bundle verified: sd-texts.js, hero-follows-language ids,
   nityaWireDrag, prose tiers) + uploaded to ASC ("Uploaded App").
